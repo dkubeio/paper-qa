@@ -6,7 +6,8 @@ import tempfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple
+import json
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -124,7 +125,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname: Optional[str] = None,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], Optional[List[str]]]:
         """Add a document to the collection."""
         # just put in temp file and use existing method
         suffix = ".txt"
@@ -151,7 +152,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname: Optional[str] = None,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], Optional[list[str]]]:
         """Add a document to the collection."""
         import urllib.request
 
@@ -174,7 +175,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_check: bool = False,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], Optional[List[str]]]:
         """Add a document to the collection."""
         if dockey is None:
             dockey = md5sum(path)
@@ -224,8 +225,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
         if self.add_texts(texts, doc):
-            return docname
-        return None
+            text_chunks = [x.text for x in texts]
+            return docname, text_chunks
+        return None, None
 
     def add_texts(
         self,
@@ -264,9 +266,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
         if self.doc_index is not None:
-            self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+            #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+            self.doc_index.add_texts([json.dumps(doc, default=vars)], metadatas=[doc.dict()])
         self.docs[doc.dockey] = doc
-        self.texts += texts
+        if self.texts_index is None:
+            self.texts += texts
         self.docnames.add(doc.docname)
         return True
 
@@ -280,6 +284,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 return
             self.docnames.remove(doc.docname)
             dockey = doc.dockey
+        if dockey is None:
+            return
+        if self.doc_index is not None:
+            # Delete docs with the dockey attribute
+            self.doc_index.delete_by_attribute({'dockey':dockey})
+            # Delete all texts with the dockey attribute
+            if self.texts_index is not None:
+                self.texts_index.delete_by_attribute({'dockey':dockey})
+                                                                           
         del self.docs[dockey]
         self.deleted_dockeys.add(dockey)
 
@@ -374,6 +387,32 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 metadatas=metadatas,
             )
 
+    def build_doc_index(self):
+        from collections import namedtuple
+        from json import JSONEncoder
+
+        def docDecoder(dictobj):
+            return namedtuple('Doc', dictobj.keys())(*dictobj.values())
+
+        if self.doc_index is None:
+            return
+        cursor = None
+        # Todo: Make it 1000
+        batch_size = 100
+        while True:
+            docs, cursor = self.doc_index.get_objects(
+                properties=['dockey'],
+                limit = batch_size,
+                cursor = cursor)
+            
+            for doc in docs:
+                new_doc = json.loads(doc.page_content, object_hook=docDecoder)
+                self.docs[doc.metadata['dockey']] = new_doc
+                self.docnames.add(new_doc.docname)
+
+            if len(docs) < batch_size:
+                break
+    
     def clear_memory(self):
         """Clear the memory of the model."""
         if self.memory_model is not None:
@@ -443,6 +482,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches = self.texts_index.similarity_search(
                 answer.question, k=_k, fetch_k=5 * _k
             )
+        for m in matches:
+            if isinstance(m.metadata["doc"], str):
+                m.metadata["doc"] = json.loads(m.metadata["doc"])
         # ok now filter
         if answer.dockey_filter is not None:
             matches = [
