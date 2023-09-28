@@ -601,6 +601,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
+        disable_summarization: bool = False,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -622,6 +623,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer=answer,
                 key_filter=key_filter,
                 get_callbacks=get_callbacks,
+                disable_summarization=disable_summarization,
             )
         )
 
@@ -635,6 +637,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
+        disable_summarization: bool = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -655,6 +658,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 max_sources=max_sources,
                 marginal_relevance=marginal_relevance,
                 get_callbacks=get_callbacks,
+                disable_summarization=disable_summarization,
             )
         if self.prompts.pre is not None:
             chain = make_chain(
