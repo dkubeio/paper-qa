@@ -9,13 +9,41 @@ from .types import Doc, Text
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
     import fitz
+    import tabula
 
     file = fitz.open(path)
+	file_name = str(path)
+	os.mkdir(file_name)
+	os.mkdir("%s/images"%file_name)
+	os.mkdir("%s/tables"%file_name)
+	os.mkdir("%s/chunks"%file_name)
+	images_path = "%s/images"%file_name
+	tables_path = "%s/tables"%file_name
+	chunks_path = "%s/chunks"%file_name
     split = ""
     pages: List[str] = []
     texts: List[Text] = []
     for i in range(file.page_count):
         page = file.load_page(i)
+        # extract tables
+        if tabula.read_pdf(pdf_path, pages=i+1):
+            tabula.convert_into(path, os.path.join(tables_path, "%s.csv"%(i+1)), output_format="csv",pages=(i+1))
+		# extract images
+        img_list = page.get_images()
+		for i, img in enumerate(img_list, start=1)
+			xref = img[0]
+			#Extract image
+			base_image = pdf_file.extract_image(xref)
+			#Store image bytes
+			image_bytes = base_image['image']
+			#Store image extension
+			image_ext = base_image['ext']
+			#Generate image file name
+			image_name = str(i) + '.' + image_ext
+			with open(os.path.join(images_path, image_name) , 'wb') as image_file:
+				image_file.write(image_bytes)
+				image_file.close()
+
         split += page.get_text("text", sort=True)
         pages.append(str(i + 1))
         # split could be so long it needs to be split
@@ -36,6 +64,10 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List
         texts.append(
             Text(text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc)
         )
+    chunks_dict = [{i:x.text} for i,x in enumerate(texts)]
+    import json
+    with open(os.path.join(chunks_path, "chunks.json", "w") as outfile:
+        json.dumps(chunks_dict, outfile)
     file.close()
     return texts
 
