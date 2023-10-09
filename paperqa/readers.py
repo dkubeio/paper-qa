@@ -7,13 +7,13 @@ from langchain.text_splitter import TokenTextSplitter
 from .types import Doc, Text
 
 
-def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> Tuple[List[Text], dict]:
+def parse_pdf_fitz(path: Path, output_dir:str, doc: Doc, chunk_chars: int, overlap: int) -> Tuple[List[Text], dict]:
     import fitz
     import tabula
 
     file = fitz.open(path)
     file_name = doc.docname
-    base_dir = "extracted_whole_doc/%s"%file_name
+    base_dir = "%s/%s"%(output_dir, file_name)
     os.makedirs(base_dir, exist_ok=True)
     images_path = "%s/images"%base_dir
     tables_path = "%s/tables"%base_dir
@@ -126,7 +126,7 @@ def parse_pdf(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text
 
 
 def parse_txt(
-    path: Path, doc: Doc, chunk_chars: int, overlap: int, html: bool = False
+    path: Path, output_dir: str, doc: Doc, chunk_chars: int, overlap: int, html: bool = False
 ) -> Tuple[List[Text], dict]:
     try:
         with open(path) as f:
@@ -136,7 +136,7 @@ def parse_txt(
             text = f.read()
     count = {}
     file_name = doc.docname
-    base_dir = "extracted_whole_doc/%s"%file_name
+    base_dir = "%s/%s"%(output_dir, file_name)
     os.makedirs(base_dir, exist_ok=True)
     images_path = "%s/images"%base_dir
     tables_path = "%s/tables"%base_dir
@@ -201,6 +201,7 @@ def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List
 
 def read_doc(
     path: Path,
+    output_dir: str,
     doc: Doc,
     chunk_chars: int = 3000,
     overlap: int = 100,
@@ -212,12 +213,12 @@ def read_doc(
         if force_pypdf:
             return parse_pdf(path, doc, chunk_chars, overlap)
         try:
-            return parse_pdf_fitz(path, doc, chunk_chars, overlap)
+            return parse_pdf_fitz(path, output_dir, doc, chunk_chars, overlap)
         except ImportError:
             return parse_pdf(path, doc, chunk_chars, overlap)
     elif str_path.endswith(".txt"):
         return parse_txt(path, doc, chunk_chars, overlap)
     elif str_path.endswith(".html"):
-        return parse_txt(path, doc, chunk_chars, overlap, html=True)
+        return parse_txt(path, output_dir, doc, chunk_chars, overlap, html=True)
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap)

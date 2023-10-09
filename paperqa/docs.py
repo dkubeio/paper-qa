@@ -170,6 +170,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def add(
         self,
         path: Path,
+        output_dir:str,
         citation: Optional[str] = None,
         docname: Optional[str] = None,
         disable_check: bool = False,
@@ -215,7 +216,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts, count = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
+        texts, count = read_doc(path, output_dir, doc, chunk_chars=chunk_chars, overlap=100)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
