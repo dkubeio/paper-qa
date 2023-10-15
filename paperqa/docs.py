@@ -486,12 +486,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
         # ok now filter
-        if answer.dockey_filter is not None:
-            matches = [
-                m
-                for m in matches
-                if m.metadata["doc"]["dockey"] in answer.dockey_filter
-            ]
+        #if answer.dockey_filter is not None:
+        #    matches = [
+        #        m
+        #        for m in matches
+        #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
+        #    ]
 
         # check if it is deleted
         matches = [
