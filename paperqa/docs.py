@@ -17,6 +17,7 @@ from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
 from langchain.vectorstores import FAISS, VectorStore
 from pydantic import BaseModel, validator
+import logging
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -55,6 +56,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     memory: bool = False
     memory_model: Optional[BaseChatMemory] = None
     jit_texts_index: bool = False
+    FORMAT = "\n\n[%(filename)s:%(lineno)s - %(funcName)5s() ]: %(message)s"
+    logging.basicConfig(format=FORMAT, level=logging.INFO)
 
     # TODO: Not sure how to get this to work
     # while also passing mypy checks
@@ -324,6 +327,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matched_docs = [self.docs[m.metadata["dockey"]] for m in matches]
         except KeyError:
             matched_docs = [Doc(**m.metadata) for m in matches]
+        logging.info("Matched docs:\n" +
+                    '\n'.join(f"docname: {m.docname}, dockey: {m.dockey}" for m in matched_docs))
         if len(matched_docs) == 0:
             return set()
         # this only works for gpt-4 (in my testing)
@@ -506,7 +511,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now finally cut down
         matches = matches[:k]
-
+        logging.info(f"chunks before sending to llm to get score:\n"+
+                    "\n\n".join(f"metadata: {m.metadata}, chunk: {m.page_content}" for m in matches ))
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -528,6 +534,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if self.prompts.skip_summary:
                     context = match.page_content
                 else:
+                    dockey = match.metadata["doc"]["dockey"]
+                    logging.info(f"dockey: {dockey}, input chunk: \n{match.page_content}\n")
                     context = await summary_chain.arun(
                         question=answer.question,
                         # Add name so chunk is stated
@@ -536,6 +544,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         text=match.page_content,
                         callbacks=callbacks,
                     )
+                    logging.info(f"dockey: {dockey}, output context:\n {context}\n")
             except Exception as e:
                 if guess_is_4xx(str(e)):
                     return None
@@ -552,7 +561,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 score=get_score(context),
             )
             return c
-
         if disable_summarization:
             contexts = [
                 Context(
@@ -573,7 +581,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # filter out failures
             contexts = [c for c in results if c is not None]
-
+        logging.info(f"Contexts created from chunks along with scores:\n"+
+                    '\n'.join(f"{c.context}" for c in contexts))
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
@@ -585,7 +594,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for c in answer.contexts
             ]
         )
-
+        logging.info(f"Final Context string: {context_str}\n\n")
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
