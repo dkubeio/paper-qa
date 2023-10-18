@@ -56,8 +56,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     memory: bool = False
     memory_model: Optional[BaseChatMemory] = None
     jit_texts_index: bool = False
-    FORMAT = "\n\n[%(filename)s:%(lineno)s - %(funcName)5s() ]: %(message)s"
-    logging.basicConfig(format=FORMAT, level=logging.INFO)
 
     # TODO: Not sure how to get this to work
     # while also passing mypy checks
