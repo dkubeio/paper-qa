@@ -95,7 +95,7 @@ def parse_pdf_fitz(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overl
     return texts,count
 
 
-def parse_pdf(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
+def parse_pdf(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: int) -> Tuple[List[Text], dict]:
     import pypdf
 
     pdfFileObj = open(path, "rb")
@@ -154,7 +154,7 @@ def parse_pdf(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: i
             metadata["chunks_count"] = count
             json.dump(metadata, outfile, indent=2)
     pdfFileObj.close()
-    return texts
+    return texts,count
 
 
 def parse_txt(
@@ -245,11 +245,11 @@ def read_doc(
     str_path = str(path)
     if str_path.endswith(".pdf"):
         if force_pypdf:
-            return parse_pdf(path, doc, chunks_dir, chunk_chars, overlap)
+            return parse_pdf(path, chunks_dir, doc, chunk_chars, overlap)
         try:
             return parse_pdf_fitz(path, chunks_dir, doc, chunk_chars, overlap)
         except ImportError:
-            return parse_pdf(path, doc, chunks_dir, chunk_chars, overlap)
+            return parse_pdf(path, chunks_dir, doc, chunk_chars, overlap)
     elif str_path.endswith(".txt"):
         return parse_txt(path, chunks_dir, doc, chunk_chars, overlap)
     elif str_path.endswith(".html"):
