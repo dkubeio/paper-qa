@@ -175,10 +175,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname: Optional[str] = None,
         disable_check: bool = False,
         dockey: Optional[DocKey] = None,
-        chunks_dir:Optional[str] = None,
-        embed_flag:Optional[bool] = True,
         chunk_chars: int = 3000,
-    ) -> Tuple[Optional[str], Optional[List[str]], dict]:
+    ) -> Tuple[Optional[str], Optional[List[str]]]:
         """Add a document to the collection."""
         if dockey is None:
             dockey = md5sum(path)
@@ -191,7 +189,70 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, chunks_dir, fake_doc, chunk_chars=chunk_chars, overlap=100)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
+            if len(texts) == 0:
+                raise ValueError(f"Could not read document {path}. Is it empty?")
+            citation = cite_chain.run(texts[0].text)
+            if len(citation) < 3 or "Unknown" in citation or "insufficient" in citation:
+                citation = f"Unknown, {os.path.basename(path)}, {datetime.now().year}"
+
+        if docname is None:
+            # get first name and year from citation
+            match = re.search(r"([A-Z][a-z]+)", citation)
+            if match is not None:
+                author = match.group(1)  # type: ignore
+            else:
+                # panicking - no word??
+                raise ValueError(
+                    f"Could not parse docname from citation {citation}. "
+                    "Consider just passing key explicitly - e.g. docs.py "
+                    "(path, citation, key='mykey')"
+                )
+            year = ""
+            match = re.search(r"(\d{4})", citation)
+            if match is not None:
+                year = match.group(1)  # type: ignore
+            docname = f"{author}{year}"
+        docname = self._get_unique_name(docname)
+        doc = Doc(docname=docname, citation=citation, dockey=dockey)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
+        # loose check to see if document was loaded
+        if (
+            len(texts) == 0
+            or len(texts[0].text) < 10
+            or (not disable_check and not maybe_is_text(texts[0].text))
+        ):
+            raise ValueError(
+                f"This does not look like a text document: {path}. Path disable_check to ignore this error."
+            )
+        if self.add_texts(texts, doc):
+            text_chunks = [x.text for x in texts]
+            return docname, text_chunks
+        return None, None
+
+
+    def generate_chunks(
+        self,
+        path: Path,
+        citation: Optional[str] = None,
+        docname: Optional[str] = None,
+        disable_check: bool = False,
+        dockey: Optional[DocKey] = None,
+        chunk_chars: int = 3000,
+    ) -> Tuple[Optional[str], Optional[List[str]]]:
+        """Add a document to the collection."""
+        if dockey is None:
+            dockey = md5sum(path)
+        if citation is None:
+            # skip system because it's too hesitant to answer
+            cite_chain = make_chain(
+                prompt=self.prompts.cite,
+                llm=cast(BaseLanguageModel, self.summary_llm),
+                skip_system=True,
+            )
+            # peak first chunk
+            fake_doc = Doc(docname="", citation="", dockey=dockey)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -218,7 +279,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts, count = read_doc(path, chunks_dir, doc, chunk_chars=chunk_chars, overlap=100)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -228,11 +289,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             raise ValueError(
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
-        if embed_flag == True:
-            if self.add_texts(texts, doc):
-                text_chunks = [x.text for x in texts]
-                return docname, text_chunks, count
-        return None, None, count
+        text_chunks = [x.text for x in texts]
+        return docname, text_chunks
 
     def add_texts(
         self,
@@ -329,8 +387,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matched_docs = [self.docs[m.metadata["dockey"]] for m in matches]
         except KeyError:
             matched_docs = [Doc(**m.metadata) for m in matches]
-        logging.info("Matched docs:\n" +
-                    '\n'.join(f"docname: {m.docname}, dockey: {m.dockey}" for m in matched_docs))
         if len(matched_docs) == 0:
             return set()
         # this only works for gpt-4 (in my testing)
@@ -513,8 +569,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now finally cut down
         matches = matches[:k]
-        logging.info(f"chunks before sending to llm to get score:\n"+
-                    "\n\n".join(f"metadata: {m.metadata}, chunk: {m.page_content}" for m in matches ))
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -537,7 +591,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     context = match.page_content
                 else:
                     dockey = match.metadata["doc"]["dockey"]
-                    logging.info(f"dockey: {dockey}, input chunk: \n{match.page_content}\n")
+                    logging.debug(f"dockey: {dockey}, input chunk: \n{match.page_content}\n")
                     context = await summary_chain.arun(
                         question=answer.question,
                         # Add name so chunk is stated
@@ -546,7 +600,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         text=match.page_content,
                         callbacks=callbacks,
                     )
-                    logging.info(f"dockey: {dockey}, output context:\n {context}\n")
+                    logging.debug(f"dockey: {dockey}, output context:\n {context}\n")
             except Exception as e:
                 if guess_is_4xx(str(e)):
                     return None
@@ -583,8 +637,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # filter out failures
             contexts = [c for c in results if c is not None]
-        logging.info(f"Contexts created from chunks along with scores:\n"+
-                    '\n'.join(f"{c.context}" for c in contexts))
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
@@ -596,7 +648,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for c in answer.contexts
             ]
         )
-        logging.info(f"Final Context string: {context_str}\n\n")
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str

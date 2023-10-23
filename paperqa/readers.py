@@ -1,60 +1,21 @@
 from pathlib import Path
-from typing import List, Tuple
-import os
+from typing import List
+
 from html2text import html2text
 from langchain.text_splitter import TokenTextSplitter
 
 from .types import Doc, Text
 
 
-def parse_pdf_fitz(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: int) -> Tuple[List[Text], dict]:
+def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
     import fitz
-    #import tabula
 
     file = fitz.open(path)
-    if chunks_dir:
-        file_name = doc.docname
-        base_dir = "%s/%s"%(chunks_dir, file_name)
-        os.makedirs(base_dir, exist_ok=True)
-        data_path = "%s/data"%base_dir
-        chunks_path = "%s/chunks"%base_dir
-        #os.mkdir(data_path)
-        os.mkdir(chunks_path)
-
-    img_count = 0
-    table_count = 0
-    text_count = 0
-
     split = ""
     pages: List[str] = []
     texts: List[Text] = []
-    chunks_list = []
     for i in range(file.page_count):
         page = file.load_page(i)
-        # extract tables
-        #tables = tabula.read_pdf(path, pages=i+1, silent=True)
-        #if(tables):
-        #    table_count += len(tables)
-        #    # note: 1 csv file can contain more than 1 tables
-        #    tabula.convert_into(path, os.path.join(data_path, "%s.csv"%(i+1)),
-        #                        output_format="csv",pages=(i+1), silent=True)
-        # extract images
-        #img_list = page.get_images()
-        #for j, img in enumerate(img_list, start=1):
-        #    img_count += 1
-        #    xref = img[0]
-        #    #Extract image
-        #    base_image = file.extract_image(xref)
-        #    #Store image bytes
-        #    image_bytes = base_image['image']
-        #    #Store image extension
-        #    image_ext = base_image['ext']
-        #    #Generate image file name
-        #    image_name = "%s_"%(i+1) + str(j) + '.' + image_ext
-        #    with open(os.path.join(data_path, image_name) , 'wb') as image_file:
-        #        image_file.write(image_bytes)
-        #        image_file.close()
-
         split += page.get_text("text", sort=True)
         pages.append(str(i + 1))
         # split could be so long it needs to be split
@@ -68,54 +29,25 @@ def parse_pdf_fitz(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overl
                     text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc
                 )
             )
-            chunks_list.append({"chunks": split[:chunk_chars]})
             split = split[chunk_chars - overlap :]
             pages = [str(i + 1)]
-            text_count += 1
     if len(split) > overlap:
         pg = "-".join([pages[0], pages[-1]])
         texts.append(
             Text(text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc)
         )
-        chunks_list.append({"chunks": split[:chunk_chars]})
-        text_count += 1
-    count = {}
-    count["text"] = text_count
-    count["image"] = img_count
-    count["table"] = table_count
-    if chunks_dir:
-        import json
-        with open(os.path.join(chunks_path, "text_chunks.json"), "w") as outfile:
-            json.dump(chunks_list, outfile, indent=2)
-        with open(os.path.join(base_dir, "metadata.json"), "w") as outfile:
-            metadata = {}
-            metadata["chunks_count"] = count
-            json.dump(metadata, outfile, indent=2)
     file.close()
-    return texts,count
+    return texts
 
 
-def parse_pdf(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: int) -> Tuple[List[Text], dict]:
+def parse_pdf(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
     import pypdf
 
     pdfFileObj = open(path, "rb")
     pdfReader = pypdf.PdfReader(pdfFileObj)
-    if chunks_dir:
-        file_name = doc.docname
-        base_dir = "%s/%s"%(chunks_dir, file_name)
-        os.makedirs(base_dir, exist_ok=True)
-        data_path = "%s/data"%base_dir
-        chunks_path = "%s/chunks"%base_dir
-        #os.mkdir(data_path)
-        os.mkdir(chunks_path)
-
-    img_count = 0
-    table_count = 0
-    text_count = 0
     split = ""
     pages: List[str] = []
     texts: List[Text] = []
-    chunks_list = []
     for i, page in enumerate(pdfReader.pages):
         split += page.extract_text()
         pages.append(str(i + 1))
@@ -130,53 +62,26 @@ def parse_pdf(path: Path, chunks_dir:str, doc: Doc, chunk_chars: int, overlap: i
                     text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc
                 )
             )
-            chunks_list.append({"chunks": split[:chunk_chars]})
             split = split[chunk_chars - overlap :]
             pages = [str(i + 1)]
-            text_count += 1
     if len(split) > overlap:
         pg = "-".join([pages[0], pages[-1]])
         texts.append(
             Text(text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc)
         )
-        chunks_list.append({"chunks": split[:chunk_chars]})
-        text_count += 1
-    count = {}
-    count["text"] = text_count
-    count["image"] = img_count
-    count["table"] = table_count
-    if chunks_dir:
-        import json
-        with open(os.path.join(chunks_path, "text_chunks.json"), "w") as outfile:
-            json.dump(chunks_list, outfile, indent=2)
-        with open(os.path.join(base_dir, "metadata.json"), "w") as outfile:
-            metadata = {}
-            metadata["chunks_count"] = count
-            json.dump(metadata, outfile, indent=2)
     pdfFileObj.close()
-    return texts,count
+    return texts
 
 
 def parse_txt(
-    path: Path, chunks_dir: str, doc: Doc, chunk_chars: int, overlap: int, html: bool = False
-) -> Tuple[List[Text], dict]:
+    path: Path, doc: Doc, chunk_chars: int, overlap: int, html: bool = False
+) -> List[Text]:
     try:
         with open(path) as f:
             text = f.read()
     except UnicodeDecodeError:
         with open(path, encoding="utf-8", errors="ignore") as f:
             text = f.read()
-    if chunks_dir:
-        file_name = doc.docname
-        base_dir = "%s/%s"%(chunks_dir, file_name)
-        os.makedirs(base_dir, exist_ok=True)
-        data_path = "%s/data"%base_dir
-        chunks_path = "%s/chunks"%base_dir
-        os.mkdir(chunks_path)
-        os.mkdir(data_path)
-
-    img_count = 0
-    table_count = 0
     if html:
         text = html2text(text)
     # yo, no idea why but the texts are not split correctly
@@ -186,20 +91,7 @@ def parse_txt(
         Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
         for i, t in enumerate(raw_texts)
     ]
-    chunks_list = [{"chunks":x.text} for x in texts]
-    count = {}
-    count["text"] = len(texts)
-    count["image"] = img_count
-    count["table"] = table_count
-    if chunks_dir:
-        import json
-        with open(os.path.join(chunks_path, "text_chunks.json"), "w") as outfile:
-            json.dump(chunks_list, outfile, indent=2)
-        with open(os.path.join(base_dir, "metadata.json"), "w") as outfile:
-            metadata = {}
-            metadata["chunks_count"] = count
-            json.dump(metadata, outfile, indent=2)
-    return texts,count
+    return texts
 
 
 def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
@@ -235,24 +127,23 @@ def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List
 
 def read_doc(
     path: Path,
-    chunks_dir: str,
     doc: Doc,
     chunk_chars: int = 3000,
     overlap: int = 100,
     force_pypdf: bool = False,
-) -> Tuple[List[Text],dict]:
+) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
     if str_path.endswith(".pdf"):
         if force_pypdf:
-            return parse_pdf(path, chunks_dir, doc, chunk_chars, overlap)
+            return parse_pdf(path, doc, chunk_chars, overlap)
         try:
-            return parse_pdf_fitz(path, chunks_dir, doc, chunk_chars, overlap)
+            return parse_pdf_fitz(path, doc, chunk_chars, overlap)
         except ImportError:
-            return parse_pdf(path, chunks_dir, doc, chunk_chars, overlap)
+            return parse_pdf(path, doc, chunk_chars, overlap)
     elif str_path.endswith(".txt"):
-        return parse_txt(path, chunks_dir, doc, chunk_chars, overlap)
+        return parse_txt(path, doc, chunk_chars, overlap)
     elif str_path.endswith(".html"):
-        return parse_txt(path, chunks_dir, doc, chunk_chars, overlap, html=True)
+        return parse_txt(path, doc, chunk_chars, overlap, html=True)
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap)
