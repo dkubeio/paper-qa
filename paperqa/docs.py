@@ -289,7 +289,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             raise ValueError(
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
-        text_chunks = [x.text for x in texts]
+        text_chunks = [{x.name:x.text} for x in texts]
         return docname, text_chunks
 
     def add_texts(
@@ -569,6 +569,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now finally cut down
         matches = matches[:k]
+
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -617,6 +618,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 score=get_score(context),
             )
             return c
+
         if disable_summarization:
             contexts = [
                 Context(
@@ -637,6 +639,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # filter out failures
             contexts = [c for c in results if c is not None]
+
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
@@ -648,6 +651,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for c in answer.contexts
             ]
         )
+
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
