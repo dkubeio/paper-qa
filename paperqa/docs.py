@@ -15,7 +15,8 @@ from langchain.embeddings.base import Embeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
-from langchain.vectorstores import FAISS, VectorStore
+from langchain.vectorstores import FAISS
+from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
 import logging
 
