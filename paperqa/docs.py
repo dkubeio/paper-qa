@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 import os
 import re
 import sys
@@ -6,8 +8,7 @@ import tempfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple
-import json
+from typing import BinaryIO, Dict, List, Optional, Set, Tuple, Union, cast
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -18,7 +19,6 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
-import logging
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -574,10 +574,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
-                self.prompts.summary,
-                self.summary_llm,
+                prompt=self.prompts.summary, # summary prompt
+                llm=self.summary_llm,
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system, # default system prompt
             )
             # This is dangerous because it
             # could mask errors that are important- like auth errors
@@ -595,6 +595,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     dockey = match.metadata["doc"]["dockey"]
                     logging.debug(f"dockey: {dockey}, input chunk: \n{match.page_content}\n")
                     context = await summary_chain.arun(
+                        system_message=self.prompts.system,
                         question=answer.question,
                         # Add name so chunk is stated
                         citation=citation,

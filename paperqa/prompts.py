@@ -2,8 +2,8 @@ from langchain.prompts import PromptTemplate
 
 summary_prompt = PromptTemplate(
     input_variables=["text", "citation", "question", "summary_length"],
-    template="Summarize the text below to help answer a question. "
-    "Do not directly answer the question, instead summarize "
+    template="<s>[INST] <<SYS>> {system_message} <</SYS>> Summarize the text below to help answer a question. "
+    "Do not directly answer the question, instead strictly summarize from the text provided "
     "to give evidence to help answer the question. "
     "Focus on specific details, including numbers, equations, or specific quotes. "
     'Reply "Not applicable" if text is irrelevant. '
@@ -13,7 +13,7 @@ summary_prompt = PromptTemplate(
     "{text}\n\n"
     "Excerpt from {citation}\n"
     "Question: {question}\n"
-    "Relevant Information Summary:",
+    "Relevant Information Summary: [/INST]",
 )
 
 qa_prompt = PromptTemplate(
@@ -56,3 +56,6 @@ default_system_prompt = (
     "Your audience is an expert, so be highly specific. "
     "If there are ambiguous terms or acronyms, first define them. "
 )
+
+# default_system_prompt = (
+#     "You are a helpful, respectful and honest assistant. Answer exactly in few words from the context")

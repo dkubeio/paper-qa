@@ -55,6 +55,7 @@ def make_chain(
     memory: Optional[BaseChatMemory] = None,
     system_prompt: str = default_system_prompt,
 ) -> FallbackLLMChain:
+    
     if memory and len(memory.load_memory_variables({})["memory"]) > 0:
         # we copy the prompt so we don't modify the original
         # TODO: Figure out pipeline prompts to avoid this
@@ -73,14 +74,18 @@ def make_chain(
             ),
         )
         prompt = new_prompt
+
     if type(llm) == ChatOpenAI:
-        system_message_prompt = SystemMessage(content=system_prompt)
+
+        # system_message_prompt = SystemMessage(content=system_prompt)
         human_message_prompt = ExtendedHumanMessagePromptTemplate(prompt=prompt)
+        
         if skip_system:
             chat_prompt = ChatPromptTemplate.from_messages([human_message_prompt])
+
         else:
             chat_prompt = ChatPromptTemplate.from_messages(
-                [system_message_prompt, human_message_prompt]
+                [human_message_prompt]
             )
         return FallbackLLMChain(prompt=chat_prompt, llm=llm)
     return FallbackLLMChain(prompt=prompt, llm=llm)
