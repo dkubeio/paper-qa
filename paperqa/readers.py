@@ -1,44 +1,34 @@
 from pathlib import Path
 from typing import List
-
+import fitz
 from html2text import html2text
 from langchain.text_splitter import TokenTextSplitter
-
 from .types import Doc, Text
-
+import re
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
-    import fitz
+    pdf_texts: List[Text] = []
+    text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
 
-    file = fitz.open(path)
-    split = ""
-    pages: List[str] = []
-    texts: List[Text] = []
-    for i in range(file.page_count):
-        page = file.load_page(i)
-        split += page.get_text("text", sort=True)
-        pages.append(str(i + 1))
-        # split could be so long it needs to be split
-        # into multiple chunks. Or it could be so short
-        # that it needs to be combined with the next chunk.
-        while len(split) > chunk_chars:
-            # pretty formatting of pages (e.g. 1-3, 4, 5-7)
-            pg = "-".join([pages[0], pages[-1]])
-            texts.append(
-                Text(
-                    text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc
-                )
-            )
-            split = split[chunk_chars - overlap :]
-            pages = [str(i + 1)]
-    if len(split) > overlap:
-        pg = "-".join([pages[0], pages[-1]])
-        texts.append(
-            Text(text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc)
-        )
-    file.close()
-    return texts
+    # read all the texts from the pdfs
+    with fitz.open(path) as fitz_file:
+        for i in range(fitz_file.page_count):
+            page = fitz_file.load_page(i)
+            page_text:str = page.get_text("text", sort=True)
 
+            page_text = page_text.encode("ascii", "ignore")
+            page_text = page_text.decode()
+            page_text = page_text.replace('\n', ' ').replace('\r', ' ')
+            page_text = re.sub(' +',' ', page_text)
+
+            texts = text_splitter.split_text(page_text)
+
+            # create chunks per page
+            for text in texts:
+                pdf_texts.append(
+                    Text(text=text, name=f"{doc.docname} page {i}", doc=doc))
+
+    return pdf_texts
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
     import pypdf
@@ -82,8 +72,15 @@ def parse_txt(
     except UnicodeDecodeError:
         with open(path, encoding="utf-8", errors="ignore") as f:
             text = f.read()
+
     if html:
         text = html2text(text)
+
+    text = text.encode("ascii", "ignore")
+    text = text.decode()
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    text = re.sub(' +',' ', text)
+
     # yo, no idea why but the texts are not split correctly
     text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
     raw_texts = text_splitter.split_text(text)
@@ -137,13 +134,17 @@ def read_doc(
     if str_path.endswith(".pdf"):
         if force_pypdf:
             return parse_pdf(path, doc, chunk_chars, overlap)
+
         try:
             return parse_pdf_fitz(path, doc, chunk_chars, overlap)
         except ImportError:
             return parse_pdf(path, doc, chunk_chars, overlap)
+
     elif str_path.endswith(".txt"):
         return parse_txt(path, doc, chunk_chars, overlap)
+
     elif str_path.endswith(".html"):
         return parse_txt(path, doc, chunk_chars, overlap, html=True)
+
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap)
