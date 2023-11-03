@@ -240,6 +240,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_check: bool = False,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
+        overlap_size=100,
     ) -> Tuple[Optional[str], Optional[List[str]]]:
         """Add a document to the collection."""
         if dockey is None:
@@ -280,7 +281,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap_size)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
