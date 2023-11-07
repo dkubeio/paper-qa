@@ -18,6 +18,7 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
+from langchain.text_splitter import TokenTextSplitter
 import logging
 
 from .chains import get_score, make_chain
@@ -240,11 +241,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_check: bool = False,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
-        overlap_size=100,
+        overlap=100,
     ) -> Tuple[Optional[str], Optional[List[str]]]:
         """Add a document to the collection."""
         if dockey is None:
             dockey = md5sum(path)
+
         if citation is None:
             # skip system because it's too hesitant to answer
             cite_chain = make_chain(
@@ -278,10 +280,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if match is not None:
                 year = match.group(1)  # type: ignore
             docname = f"{author}{year}"
+
         docname = self._get_unique_name(docname)
+
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap_size)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap)
+
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -305,19 +310,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         """
         if doc.dockey in self.docs:
             return False
+
         if len(texts) == 0:
             raise ValueError("No texts to add.")
+
         if doc.docname in self.docnames:
             new_docname = self._get_unique_name(doc.docname)
             for t in texts:
                 t.name = t.name.replace(doc.docname, new_docname)
             doc.docname = new_docname
+
         if texts[0].embeddings is None:
             text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
             for i, t in enumerate(texts):
                 t.embeddings = text_embeddings[i]
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
+
         if self.texts_index is not None:
             try:
                 # TODO: Simplify - super weird

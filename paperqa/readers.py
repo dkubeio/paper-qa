@@ -1,3 +1,5 @@
+import json
+import time
 from pathlib import Path
 from typing import List
 import fitz
@@ -14,12 +16,12 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List
     with fitz.open(path) as fitz_file:
         for i in range(fitz_file.page_count):
             page = fitz_file.load_page(i)
-            page_text:str = page.get_text("text", sort=True)
+            page_text: str = page.get_text("text", sort=True)
 
-            page_text = page_text.encode("ascii", "ignore")
-            page_text = page_text.decode()
+            p_bytes = page_text.encode("ascii", "ignore")
+            page_text = p_bytes.decode()
             page_text = page_text.replace('\n', ' ').replace('\r', ' ')
-            page_text = re.sub(' +',' ', page_text)
+            page_text = re.sub(' +', ' ', page_text)
 
             texts = text_splitter.split_text(page_text)
 
@@ -90,6 +92,28 @@ def parse_txt(
     ]
     return texts
 
+def parse_json(
+    path: Path, doc: Doc, chunk_chars: int, overlap: int, html: bool = False
+) -> List[Text]:
+    try:
+        with open(path) as f:
+            file_contents = f.read()
+    except UnicodeDecodeError:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            file_contents = f.read()
+
+    json_contents = json.loads(file_contents)
+    text = json_contents['text']
+    doc_name = json_contents['url']
+
+    text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
+    raw_texts = text_splitter.split_text(text)
+    texts = [
+        Text(text=t, name=f"{doc_name}", doc=doc)
+        for i, t in enumerate(raw_texts)
+    ]
+
+    return texts
 
 def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List[Text]:
     """Parse a document into chunks, based on line numbers (for code)."""
@@ -145,6 +169,9 @@ def read_doc(
 
     elif str_path.endswith(".html"):
         return parse_txt(path, doc, chunk_chars, overlap, html=True)
+
+    elif str_path.endswith(".json") and "meta_data.json" not in str_path:
+        return parse_json(path, doc, chunk_chars, overlap)
 
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap)
