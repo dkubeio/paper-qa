@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, cast, Tuple
 
 from langchain.base_language import BaseLanguageModel
 from langchain.callbacks.manager import (
@@ -86,22 +86,25 @@ def make_chain(
     return FallbackLLMChain(prompt=prompt, llm=llm)
 
 
-def get_score(text: str) -> int:
+def get_score(text: str) -> Tuple[int, bool]:
     score = re.search(r"[sS]core[:is\s]+([0-9]+)", text)
     if not score:
         score = re.search(r"\(([0-9])\w*\/", text)
+        llm_score = False
+    else:
+        llm_score = True
     if score:
         s = int(score.group(1))
         if s > 10:
             s = int(s / 10)  # sometimes becomes out of 100
-        return s
+        return s, llm_score
     last_few = text[-15:]
     scores = re.findall(r"([0-9]+)", last_few)
     if scores:
         s = int(scores[-1])
         if s > 10:
             s = int(s / 10)  # sometimes becomes out of 100
-        return s
+        return s, llm_score
     if len(text) < 100:
-        return 1
-    return 5
+        return 1, llm_score
+    return 5, llm_score

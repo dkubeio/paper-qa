@@ -1,5 +1,5 @@
 from langchain.prompts import PromptTemplate
-
+'''
 summary_prompt = PromptTemplate(
     input_variables=["text", "citation", "question", "summary_length"],
     template="Summarize the text below to help answer a question. "
@@ -19,6 +19,47 @@ summary_prompt = PromptTemplate(
 qa_prompt = PromptTemplate(
     input_variables=["context", "answer_length", "question"],
     template="Write an answer ({answer_length}) "
+    "for the question below based on the provided context. "
+    "If the context provides insufficient information and the question cannot be directly answered, "
+    'reply "I cannot answer". '
+    "For each part of your answer, indicate which sources most support it "
+    "via valid citation markers at the end of sentences, like (Example2012). \n"
+    "Context (with relevance scores):\n {context}\n"
+    "Question: {question}\n"
+    "Answer: ",
+)
+summary_prompt = PromptTemplate(
+    input_variables=["text", "citation", "question", "summary_length"],
+    template="Summarize the text below with sufficient details to help answer a question. "
+    "Provide specific details, including numbers, equations, or specific quotes. "
+    'Reply "Not applicable" if text is irrelevant. '
+    "Limit the summary to {summary_length} words. At the end of your response, provide a score from 1-10 on a newline "
+    "indicating relevance to the question. Do not explain your score. "
+    "\n\n"
+    "{text}\n\n"
+    "Excerpt from {citation}\n"
+    "Question: {question}\n"
+    "Relevant Information Summary:",
+)
+'''
+summary_prompt = PromptTemplate(
+    input_variables=["text", "citation", "question", "summary_length"],
+    template="Provide a summary of the Text below with sufficient details to help answer the Question below. "
+    "Also provide a score from 0-10 with an interval of 1, indicating relevance of the Text below to the Question below. "
+    "Do not explain the score. "
+    "Provide specific details, including numbers, equations, or specific quotes. "
+    'If text is irrelevant, Reply "None" in answer with a score of 0. '
+    "Limit the answer to {summary_length} words. "
+    "Output format:\nAnswer:\n- ...\n- ...\nScore:\n- ...\n"
+    "\n\n"
+    "Text:{text}\n\n"
+    "Excerpt from {citation}\n"
+    "Question: {question}\n"
+    "Output:\n\n",
+)
+qa_prompt = PromptTemplate(
+    input_variables=["context", "answer_length", "question"],
+    template="Write an answer in {answer_length} "
     "for the question below based on the provided context. "
     "If the context provides insufficient information and the question cannot be directly answered, "
     'reply "I cannot answer". '
@@ -51,8 +92,19 @@ citation_prompt = PromptTemplate(
     "Citation:",
 )
 
+'''
 default_system_prompt = (
     "Answer in an direct and concise tone. "
     "Your audience is an expert, so be highly specific. "
     "If there are ambiguous terms or acronyms, first define them. "
+)
+default_system_prompt = (
+    "You are a Retrieval Augmented Generation chatbot. "
+    "Think step by step and answer in a direct and concise tone. "
+    "If there are ambiguous terms or acronyms, first define them. "
+)
+'''
+default_system_prompt = (
+    "You are a Retrieval Augmented Generation chatbot. "
+    "Think step by step and answer in a direct and concise tone. "
 )

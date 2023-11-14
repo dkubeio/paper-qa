@@ -58,6 +58,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     memory: bool = False
     memory_model: Optional[BaseChatMemory] = None
     jit_texts_index: bool = False
+    debug_trace_qindex: int = 0
+    debug_trace_qa: bool = os.getenv("DEBUG_TRACE_QA", False)
 
     # TODO: Not sure how to get this to work
     # while also passing mypy checks
@@ -553,9 +555,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k
             )
         else:
-            matches = self.texts_index.similarity_search(
-                answer.question, k=_k, fetch_k=5 * _k
+            matches_with_score = self.texts_index.similarity_search_with_score(
+                answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
             )
+            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+            matches = [match_with_score[0] for match_with_score in matches_with_score]
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
@@ -619,6 +623,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 raise e
             if "not applicable" in context.lower() or "not relevant" in context.lower():
                 return None
+            score, llm_score = get_score(context)
             c = Context(
                 context=context,
                 text=Text(
@@ -626,8 +631,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     name=match.metadata["name"],
                     doc=Doc(**match.metadata["doc"]),
                 ),
-                score=get_score(context),
+                score=score,
             )
+            if self.debug_trace_qa:
+                with open(f"/tmp/debug-{self.debug_trace_qindex}.txt", "a") as f:
+                    f.write(f"\n\n-------Chunk: {score}, {llm_score}\n" + match.page_content)
+                    f.write("\n\n------Summary:\n" + c.context)
             return c
 
         if disable_summarization:
@@ -650,11 +659,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # filter out failures
             contexts = [c for c in results if c is not None]
-
+        
+        if self.debug_trace_qa:
+            print('LLM Score: ', *(summary.score for summary in contexts))
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
-        answer.contexts = answer.contexts[:max_sources]
+        answer.contexts = [summary for summary in answer.contexts[:max_sources] if summary.score > 5]
         context_str = "\n\n".join(
             [
                 f"{c.text.name}: {c.context}"
@@ -673,7 +684,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         query: str,
         k: int = 10,
         max_sources: int = 5,
-        length_prompt="about 100 words",
+        length_prompt="about 200 words",
         marginal_relevance: bool = True,
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
@@ -761,12 +772,22 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory=self.memory_model,
                 system_prompt=self.prompts.system,
             )
-            answer_text = await qa_chain.arun(
-                context=answer.context,
-                answer_length=answer.answer_length,
-                question=answer.question,
-                callbacks=callbacks,
-            )
+            try:
+                answer_text = await qa_chain.arun(
+                    context=answer.context,
+                    answer_length=answer.answer_length,
+                    question=answer.question,
+                    callbacks=callbacks,
+                )
+            except Exception as e:
+                answer_text = str(e)
+        if self.debug_trace_qa:
+            with open(f"/tmp/debug-{self.debug_trace_qindex}.txt", "a") as f:
+                f.write(f"\n\n-------Question:\n" + answer.context)
+                f.write("\n\n----------Answer:\n" + answer_text)
+                f.write(f"\n\n-----------User:\n" + answer.question)
+                f.write("\n----------------------------\n")
+            self.debug_trace_qindex += 1
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
