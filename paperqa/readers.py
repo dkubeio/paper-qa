@@ -143,7 +143,7 @@ def read_doc(
     elif str_path.endswith(".txt"):
         return parse_txt(path, doc, chunk_chars, overlap)
 
-    elif str_path.endswith(".html"):
+    elif str_path.endswith(".html") or str_path.endswith(".htm"):
         return parse_txt(path, doc, chunk_chars, overlap, html=True)
 
     else:
