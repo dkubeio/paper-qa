@@ -238,7 +238,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         path: Path,
         citation: Optional[str] = None,
         docname: Optional[str] = None,
-        disable_check: bool = False,
+        disable_check: bool = True,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
         overlap=100,
@@ -286,7 +286,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap)
-
         # loose check to see if document was loaded
         if (
             len(texts) == 0
