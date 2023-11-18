@@ -19,6 +19,7 @@ from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
 import logging
+from sentence_transformers import CrossEncoder
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -526,6 +527,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         detailed_citations: bool = False,
         disable_vector_search: bool = False,
         disable_summarization: bool = False,
+        use_reranker: bool = False,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -571,6 +573,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # now finally cut down
         matches = matches[:k]
 
+        # create score for each match
+        for i, match in enumerate(matches):
+            match.metadata["score"] = 0
+
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -609,6 +615,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 raise e
             if "not applicable" in context.lower() or "not relevant" in context.lower():
                 return None
+
             c = Context(
                 context=context,
                 text=Text(
@@ -635,11 +642,38 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             ]
 
         else:
-            results = await gather_with_concurrency(
-                self.max_concurrent, *[process(m) for m in matches]
-            )
-            # filter out failures
-            contexts = [c for c in results if c is not None]
+            if use_reranker:
+                query_and_matches = [[answer.question, m.page_content] for m in matches]
+                model = CrossEncoder(
+                    model_name="BAAI/bge-reranker-large", max_length=512
+                )
+                scores = model.predict(query_and_matches)
+                for match, score in zip(matches, scores):
+                    match.metadata['score'] = score
+
+                matches = sorted(matches, key=lambda x: -x.metadata['score'] if x.metadata['score'] else 0)
+                for i, match in enumerate(matches):
+                    logging.info(f"content: {match.page_content[:32]} {match.metadata['score']}")
+
+                contexts = [
+                    Context(
+                        context=match.page_content,
+                        text=Text(
+                            text=match.page_content,
+                            name=match.metadata["name"],
+                            doc=Doc(**match.metadata["doc"]),
+                        ),
+                        score=match.metadata['score'],
+                    )
+                    for match in matches
+                ]
+
+            else:
+                results = await gather_with_concurrency(
+                    self.max_concurrent, *[process(m) for m in matches]
+                )
+                # filter out failures
+                contexts = [c for c in results if c is not None]
 
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
@@ -669,6 +703,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
+        use_reranker: bool = False,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -691,6 +726,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 key_filter=key_filter,
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
+                use_reranker=use_reranker,
             )
         )
 
@@ -705,6 +741,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
+        use_reranker: bool = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -726,6 +763,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 marginal_relevance=marginal_relevance,
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
+                use_reranker=use_reranker,
             )
         if self.prompts.pre is not None:
             chain = make_chain(
