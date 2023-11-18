@@ -13,22 +13,21 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int, overlap: int) -> List
     text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
 
     # read all the texts from the pdfs
-    with fitz.open(path) as fitz_file:
+    with fitz.open(str(path)) as fitz_file:
+        file_contents = ""
         for i in range(fitz_file.page_count):
             page = fitz_file.load_page(i)
-            page_text: str = page.get_text("text", sort=True)
+            file_contents = file_contents + page.get_text("text", sort=True)
 
-            p_bytes = page_text.encode("ascii", "ignore")
-            page_text = p_bytes.decode()
-            page_text = page_text.replace('\n', ' ').replace('\r', ' ')
-            page_text = re.sub(' +', ' ', page_text)
+        p_bytes = file_contents.encode("ascii", "ignore")
+        file_contents = p_bytes.decode()
+        file_contents = file_contents.replace('\n', ' ').replace('\r', ' ')
+        file_contents = re.sub(' +', ' ', file_contents)
 
-            texts = text_splitter.split_text(page_text)
-
-            # create chunks per page
-            for text in texts:
-                pdf_texts.append(
-                    Text(text=text, name=f"{doc.docname} page {i}", doc=doc))
+        # create chunks per page
+        for text in text_splitter.split_text(file_contents):
+            pdf_texts.append(
+                Text(text=text, name=f"{doc.docname}", doc=doc))
 
     return pdf_texts
 
