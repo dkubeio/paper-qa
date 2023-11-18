@@ -551,6 +551,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_summarization: bool = False,
         use_reranker: bool = False,
     ) -> Answer:
+        logging.info(f"{use_reranker}", "**"*32)
         if disable_vector_search:
             k = k * 10000
         if len(self.docs) == 0 and self.doc_index is None:
