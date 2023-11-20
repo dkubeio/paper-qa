@@ -787,13 +787,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
-        if self.debug_trace_qa:
-            with open(f"/tmp/debug-{self.debug_trace_qindex}.txt", "a") as f:
-                f.write(f"\n\n-------Question:\n" + answer.context)
-                f.write("\n\n----------Answer:\n" + answer_text)
-                f.write(f"\n\n-----------User:\n" + answer.question)
-                f.write("\n----------------------------\n")
-            self.debug_trace_qindex += 1
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
