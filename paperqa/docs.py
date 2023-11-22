@@ -6,8 +6,9 @@ import tempfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
 import json
+import tiktoken
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -18,7 +19,7 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
-from langchain.text_splitter import TokenTextSplitter
+from langchain.text_splitter import TextSplitter
 import logging
 
 from .chains import get_score, make_chain
@@ -242,7 +243,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
         overlap=100,
-    ) -> Tuple[Optional[str], Optional[List[str]]]:
+        text_splitter: TextSplitter = None,
+    ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
             dockey = md5sum(path)
@@ -285,7 +287,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -295,7 +297,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             raise ValueError(
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
-        text_chunks = [{x.name:x.text} for x in texts]
+
+        # we should use the same encoding for all texts, but the bge-large-en-v1.5 model
+        # has a max length of 512 tokens
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        text_chunks = [{"page": x.name, "text_len": len(x.text),
+                        "chunk": x.text, "tokens": len(encoding.encode(x.text))} for x in texts]
         return docname, text_chunks
 
     def add_texts(
@@ -332,10 +339,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.text, x.embeddings), texts)
                 )
-                self.texts_index.add_embeddings(  # type: ignore
+
+                vector_ids = self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
                     metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
+
+                for text, vector_id in zip(texts, vector_ids):
+                    text.vector_id = vector_id
+                    print(f"vector_id: {vector_id}")
+
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
         if self.doc_index is not None:
