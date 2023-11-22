@@ -1,5 +1,6 @@
 import asyncio
 import os
+import pprint
 import re
 import sys
 import tempfile
@@ -348,7 +349,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                 for text, vector_id in zip(texts, vector_ids):
                     text.vector_id = vector_id
-                    print(f"vector_id: {vector_id}")
 
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
@@ -550,6 +550,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_vector_search: bool = False,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        collect_metrics: bool = False,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -649,7 +650,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             return c
 
-        if disable_summarization:
+        if disable_summarization or collect_metrics:
             contexts = [
                 Context(
                     context=match.page_content,
@@ -658,6 +659,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         text=match.page_content,
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
+                        vector_id=match.metadata["id"],
                     ),
                 )
                 for match in matches
@@ -684,6 +686,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             text=match.page_content,
                             name=match.metadata["name"],
                             doc=Doc(**match.metadata["doc"]),
+                            vector_id=match.metadata["id"],
                         ),
                         score=match.metadata['score'],
                     )
@@ -726,6 +729,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        collect_metrics: bool = False,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -749,6 +753,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
+                collect_metrics=collect_metrics,
             )
         )
 
@@ -764,6 +769,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        collect_metrics: bool = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -786,7 +792,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
+                collect_metrics=collect_metrics
             )
+
+        if collect_metrics:
+            return answer
+
         if self.prompts.pre is not None:
             chain = make_chain(
                 self.prompts.pre,
@@ -798,6 +809,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 question=answer.question, callbacks=get_callbacks("pre")
             )
             answer.context = pre + "\n\n" + answer.context
+
         bib = dict()
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
