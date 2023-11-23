@@ -37,6 +37,8 @@ class Text(BaseModel):
     token_count: Optional[int] = 0
     parent_chunk: Optional["Text"] = None
     vector_id: Optional[str] = None
+    reranker_vector_id: Optional[str] = None
+    base_vector_id: Optional[str] = None
 
 
 class PromptCollection(BaseModel):
