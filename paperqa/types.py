@@ -39,6 +39,8 @@ class Text(BaseModel):
     vector_id: Optional[str] = None
     reranker_vector_id: Optional[str] = None
     base_vector_id: Optional[str] = None
+    embed_text: Optional[str] = None
+
 
 
 class PromptCollection(BaseModel):
