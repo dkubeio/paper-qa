@@ -345,11 +345,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     map(lambda x: (x.text, x.embeddings), texts)
                 )
 
-                vector_ids = [str(uuid.uuid4()) for i in range(len(texts))]
-                self.texts_index.add_embeddings(  # type: ignore
+                vector_ids = self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
-                    metadatas=[t.dict(exclude={"embeddings", "text"},
-                    ids=vector_ids) for t in texts],
+                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts]
                 )
 
             except AttributeError:
