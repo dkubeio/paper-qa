@@ -58,8 +58,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     memory: bool = False
     memory_model: Optional[BaseChatMemory] = None
     jit_texts_index: bool = False
-    debug_trace_qindex: int = 0
-    debug_trace_qa: bool = os.getenv("DEBUG_TRACE_QA", False)
 
     # TODO: Not sure how to get this to work
     # while also passing mypy checks
@@ -558,12 +556,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
             )
-            if self.debug_trace_qa:
-                with open(f"/tmp/debug-{self.debug_trace_qindex}.txt", "a") as f:
-                    f.write("-----Vector Match:\n")
-                    for i in range(3):
-                        f.write(f"{matches_with_score[i][0].metadata['name']}, {str(matches_with_score[i][1])} ")
-                    f.write("\n")
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
         for m in matches:
@@ -639,10 +631,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 ),
                 score=score,
             )
-            if self.debug_trace_qa:
-                with open(f"/tmp/debug-{self.debug_trace_qindex}.txt", "a") as f:
-                    f.write(f"\n\n-------Chunk: {score}, {llm_score}\n" + match.page_content)
-                    f.write("\n\n------Summary:\n" + c.context)
             return c
 
         if disable_summarization:
@@ -666,8 +654,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # filter out failures
             contexts = [c for c in results if c is not None]
         
-        if self.debug_trace_qa:
-            print('LLM Score: ', *(summary.score for summary in contexts))
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
