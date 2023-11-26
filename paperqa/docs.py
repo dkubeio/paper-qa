@@ -24,6 +24,7 @@ from pydantic import BaseModel, validator
 from langchain.text_splitter import TextSplitter
 import logging
 from sentence_transformers import CrossEncoder
+from uuid import uuid4
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -305,7 +306,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # has a max length of 512 tokens
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = [{"page": x.name, "text_len": len(x.text),
-                        "chunk": x.text, "tokens": len(encoding.encode(x.text))} for x in texts]
+                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
+                        "tokens": len(encoding.encode(x.text))} for x in texts]
         return docname, text_chunks
 
     def add_texts(
@@ -342,14 +344,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.text, x.embeddings), texts)
                 )
+                vector_ids = [x.vector_id for x in texts]
 
-                vector_ids = self.texts_index.add_embeddings(  # type: ignore
+                self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
-                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts]
+                    ids = vector_ids,
+                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
-
-                for text, vector_id in zip(texts, vector_ids):
-                    text.vector_id = vector_id
 
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
@@ -515,7 +516,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         detailed_citations: bool = False,
         disable_vector_search: bool = False,
-        disable_summarization: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None"
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -536,7 +538,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 detailed_citations=detailed_citations,
                 disable_vector_search=disable_vector_search,
-                disable_summarization=disable_summarization,
+                disable_answer=disable_answer,
             )
         )
 
@@ -549,8 +551,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         detailed_citations: bool = False,
         disable_vector_search: bool = False,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None",
         collect_metrics: bool = False,
     ) -> Answer:
         if disable_vector_search:
@@ -728,9 +730,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
-        collect_metrics: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None",
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -768,8 +769,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None", # Replace this with enum
         collect_metrics: bool = False,
     ) -> Answer:
         if k < max_sources:
@@ -785,15 +786,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 if len(keys) > 0:
                     answer.dockey_filter = keys
+
             answer = await self.aget_evidence(
                 answer,
                 k=k,
                 max_sources=max_sources,
                 marginal_relevance=marginal_relevance,
                 get_callbacks=get_callbacks,
-                disable_summarization=disable_summarization,
-                use_reranker=use_reranker,
-                collect_metrics=collect_metrics
+                disable_answer=disable_answer,
+                reranker=reranker,
             )
 
         if collect_metrics:

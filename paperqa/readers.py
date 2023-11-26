@@ -19,23 +19,28 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
             length_function=len, is_separator_regex=False,
         )
 
-    # read all the texts from the pdfs
-    with fitz.open(str(path)) as fitz_file:
-        file_contents = ""
+    last_text = ""
+    with fitz.open(path) as fitz_file:
         for i in range(fitz_file.page_count):
             page = fitz_file.load_page(i)
-            file_contents = file_contents + page.get_text("text", sort=True)
+            page_text:str = last_text+' '+page.get_text("text", sort=True)
 
-        p_bytes = file_contents.encode("ascii", "ignore")
-        file_contents = p_bytes.decode()
-        file_contents = file_contents.replace('\n', ' ').replace('\r', ' ')
-        file_contents = re.sub(' +', ' ', file_contents)
+            page_text = page_text.encode("ascii", "ignore")
+            page_text = page_text.decode()
+            page_text = page_text.replace('\n', ' ').replace('\r', ' ')
+            page_text = re.sub(' +',' ', page_text)
 
-        # create chunks per page
-        for text in text_splitter.split_text(file_contents):
-            pdf_texts.append(
-                Text(text=text, name=f"{doc.docname}", doc=doc))
+            page_texts = text_splitter.split_text(page_text)
+            last_text = page_texts[-1]
+            texts = page_texts[:-1]
 
+            # create chunks per page
+            for text in texts:
+                pdf_texts.append(
+                    Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
+    if last_text != "":
+        pdf_texts.append(
+                Text(text=last_text, name=f"{doc.docname} page {fitz_file.page_count}", doc=doc))
     return pdf_texts
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
