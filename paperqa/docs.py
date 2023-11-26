@@ -4,6 +4,7 @@ import pprint
 import re
 import sys
 import tempfile
+import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
