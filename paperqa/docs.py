@@ -545,8 +545,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k
             )
         else:
-            matches = self.texts_index.similarity_search(
-                answer.question, k=_k, fetch_k=5 * _k
+            matches = self.texts_index.similarity_search_with_score(
+                answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
             )
         for m in matches:
             if isinstance(m.metadata["doc"], str):
