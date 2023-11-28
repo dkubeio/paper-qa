@@ -11,24 +11,27 @@ import re
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
                    overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
-    pdf_texts: List[Text] = []
-    # text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
-    if text_splitter is None:
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_chars, chunk_overlap=overlap,
-            length_function=len, is_separator_regex=False,
-        )
+    try:
+        pdf_texts: List[Text] = []
+        # text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
+        if text_splitter is None:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_chars, chunk_overlap=overlap,
+                length_function=len, is_separator_regex=False,
+            )
 
-    last_text = ""
-    with fitz.open(path) as fitz_file:
+        last_text = ""
+        # with fitz.open(path) as fitz_file:
+        fitz_file = fitz.open(path)  # type: ignore
+
         for i in range(fitz_file.page_count):
             page = fitz_file.load_page(i)
-            page_text:str = last_text+' '+page.get_text("text", sort=True)
+            page_text: str = last_text + ' ' + page.get_text("text", sort=True)
 
             page_text = page_text.encode("ascii", "ignore")
             page_text = page_text.decode()
             page_text = page_text.replace('\n', ' ').replace('\r', ' ')
-            page_text = re.sub(' +',' ', page_text)
+            page_text = re.sub(' +', ' ', page_text)
 
             page_texts = text_splitter.split_text(page_text)
             last_text = page_texts[-1]
@@ -38,10 +41,21 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
             for text in texts:
                 pdf_texts.append(
                     Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
-    if last_text != "":
-        pdf_texts.append(
-                Text(text=last_text, name=f"{doc.docname} page {fitz_file.page_count}", doc=doc))
-    return pdf_texts
+
+        if last_text != "":
+            pdf_texts.append(
+                    Text(text=last_text, name=f"{doc.docname} page {fitz_file.page_count}", doc=doc))
+
+        fitz_file.close()
+
+        return pdf_texts
+    except Exception as e:
+        print(f"Error in parse_pdf_fitz: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
               overlap: int, text_splitter: TextSplitter=None) -> List[Text]:

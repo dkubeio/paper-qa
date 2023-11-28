@@ -348,7 +348,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 vector_ids = [x.vector_id for x in texts]
                 self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
-                    ids = vector_ids,
+                    ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
 
@@ -654,7 +654,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             return c
 
-        if disable_summarization or collect_metrics:
+        if disable_answer or collect_metrics:
             contexts = [
                 Context(
                     context=match.page_content,
@@ -670,7 +670,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             ]
 
         else:
-            if use_reranker:
+            if reranker:
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
                     model_name="BAAI/bge-reranker-large", max_length=512
@@ -754,7 +754,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer=answer,
                 key_filter=key_filter,
                 get_callbacks=get_callbacks,
-                disable_summarization=disable_summarization,
+                disable_answer=disable_answer,
                 use_reranker=use_reranker,
                 collect_metrics=collect_metrics,
             )

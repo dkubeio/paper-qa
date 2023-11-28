@@ -40,6 +40,7 @@ class Text(BaseModel):
     reranker_vector_id: Optional[str] = None
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
+    relevant_vectors: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
