@@ -42,7 +42,6 @@ class Text(BaseModel):
     embed_text: Optional[str] = None
 
 
-
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
     qa: PromptTemplate = qa_prompt
