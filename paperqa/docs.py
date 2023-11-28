@@ -545,9 +545,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k
             )
         else:
-            matches = self.texts_index.similarity_search_with_score(
+            matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
             )
+            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+            matches = [match_with_score[0] for match_with_score in matches_with_score]
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
@@ -697,7 +699,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         query: str,
         k: int = 10,
         max_sources: int = 5,
-        length_prompt="about 100 words",
+        length_prompt="about 200 words",
         marginal_relevance: bool = True,
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
