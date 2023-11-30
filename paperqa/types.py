@@ -94,6 +94,7 @@ class Context(BaseModel):
 
     context: str
     text: Text
+    vector_id: str
     score: int = 5
 
 

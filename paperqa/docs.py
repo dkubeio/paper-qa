@@ -625,6 +625,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     name=match.metadata["name"],
                     doc=Doc(**match.metadata["doc"]),
                 ),
+                vector_id=match.metadata["_additional"]["id"],
                 score=get_score(context),
             )
             return c
@@ -639,6 +640,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                     ),
+                    vector_id=match.metadata["_additional"]["id"]
                 )
                 for match in matches
             ]
@@ -665,6 +667,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             name=match.metadata["name"],
                             doc=Doc(**match.metadata["doc"]),
                         ),
+                        vector_id=match.metadata["_additional"]["id"],
                         score=match.metadata['score'],
                     )
                     for match in matches
@@ -791,12 +794,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory=self.memory_model,
                 system_prompt=self.prompts.system,
             )
-            answer_text = await qa_chain.arun(
-                context=answer.context,
-                answer_length=answer.answer_length,
-                question=answer.question,
-                callbacks=callbacks,
-            )
+            try:
+                answer_text = await qa_chain.arun(
+                    context=answer.context,
+                    answer_length=answer.answer_length,
+                    question=answer.question,
+                    callbacks=callbacks,
+                )
+            except Exception as e:
+                answer_text = str(e)
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
