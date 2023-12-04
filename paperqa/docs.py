@@ -528,6 +528,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_vector_search: bool = False,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        trace_id: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -548,11 +549,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
             )
+
+            # matches_with_score is a list of tuples (doc, score)
+            # fetch all the scores in a list, sort them in descending order
+            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
+
+            for m, score in zip(matches[:k], scores[:k]):
+                vector_id = m.metadata["_additional"]["id"]
+                print(f"trace_id:{trace_id} vectorid:{vector_id} score:{score}")
+
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
+
         # ok now filter
         #if answer.dockey_filter is not None:
         #    matches = [
@@ -656,6 +667,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     match.metadata['score'] = score
 
                 matches = sorted(matches, key=lambda x: -x.metadata['score'] if x.metadata['score'] else 0)
+
+                for m in matches:
+                    vector_id = m.metadata["_additional"]["id"]
+                    print(f"trace_id:{trace_id} rerank-vectorid:{vector_id} score:{m.metadata['score']}")
+
                 for i, match in enumerate(matches):
                     logging.info(f"content: {match.page_content[:32]} {match.metadata['score']}")
 
@@ -709,6 +725,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        trace_id: Optional[str] = None,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -732,6 +749,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
+                trace_id=trace_id,
             )
         )
 
@@ -747,6 +765,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
+        trace_id: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -769,6 +788,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
+                trace_id=trace_id
             )
         if self.prompts.pre is not None:
             chain = make_chain(
