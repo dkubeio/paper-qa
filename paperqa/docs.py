@@ -528,7 +528,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_vector_search: bool = False,
         disable_summarization: bool = False,
         use_reranker: bool = False,
-        trace_id: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -558,7 +557,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             for m, score in zip(matches[:k], scores[:k]):
                 vector_id = m.metadata["_additional"]["id"]
-                print(f"trace_id:{trace_id} vectorid:{vector_id} score:{score}")
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -725,7 +723,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
-        trace_id: Optional[str] = None,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -749,7 +746,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
-                trace_id=trace_id,
             )
         )
 
@@ -765,7 +761,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_summarization: bool = False,
         use_reranker: bool = False,
-        trace_id: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -788,7 +783,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_summarization=disable_summarization,
                 use_reranker=use_reranker,
-                trace_id=trace_id
             )
         if self.prompts.pre is not None:
             chain = make_chain(
