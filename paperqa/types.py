@@ -34,6 +34,13 @@ class Text(BaseModel):
     name: str
     doc: Doc
     embeddings: Optional[List[float]] = None
+    token_count: Optional[int] = 0
+    parent_chunk: Optional["Text"] = None
+    vector_id: Optional[str] = None
+    reranker_vector_id: Optional[str] = None
+    base_vector_id: Optional[str] = None
+    embed_text: Optional[str] = None
+    relevant_vectors: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
