@@ -1,13 +1,16 @@
 import asyncio
 import os
+import pprint
 import re
 import sys
 import tempfile
+import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
 import json
+import tiktoken
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -18,8 +21,10 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
+from langchain.text_splitter import TextSplitter
 import logging
 from sentence_transformers import CrossEncoder
+from uuid import uuid4
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -241,10 +246,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_check: bool = False,
         dockey: Optional[DocKey] = None,
         chunk_chars: int = 3000,
-    ) -> Tuple[Optional[str], Optional[List[str]]]:
+        overlap=100,
+        text_splitter: TextSplitter = None,
+    ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
             dockey = md5sum(path)
+
         if citation is None:
             # skip system because it's too hesitant to answer
             cite_chain = make_chain(
@@ -278,10 +286,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if match is not None:
                 year = match.group(1)  # type: ignore
             docname = f"{author}{year}"
+
         docname = self._get_unique_name(docname)
+
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -291,7 +301,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             raise ValueError(
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
-        text_chunks = [{x.name:x.text} for x in texts]
+
+        # we should use the same encoding for all texts, but the bge-large-en-v1.5 model
+        # has a max length of 512 tokens
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        text_chunks = [{"page": x.name, "text_len": len(x.text),
+                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
+                        "tokens": len(encoding.encode(x.text))} for x in texts]
         return docname, text_chunks
 
     def add_texts(
@@ -305,29 +321,37 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         """
         if doc.dockey in self.docs:
             return False
+
         if len(texts) == 0:
             raise ValueError("No texts to add.")
+
         if doc.docname in self.docnames:
             new_docname = self._get_unique_name(doc.docname)
             for t in texts:
                 t.name = t.name.replace(doc.docname, new_docname)
             doc.docname = new_docname
+
         if texts[0].embeddings is None:
             text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
             for i, t in enumerate(texts):
                 t.embeddings = text_embeddings[i]
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
+
         if self.texts_index is not None:
             try:
                 # TODO: Simplify - super weird
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.text, x.embeddings), texts)
                 )
+
+                vector_ids = [x.vector_id for x in texts]
                 self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
+                    ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
+
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
         if self.doc_index is not None:
@@ -492,7 +516,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         detailed_citations: bool = False,
         disable_vector_search: bool = False,
-        disable_summarization: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None"
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -513,7 +538,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 detailed_citations=detailed_citations,
                 disable_vector_search=disable_vector_search,
-                disable_summarization=disable_summarization,
+                disable_answer=disable_answer,
             )
         )
 
@@ -526,8 +551,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         detailed_citations: bool = False,
         disable_vector_search: bool = False,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None",
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -546,7 +571,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         else:
             matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k, search_distance=0.7
+                answer.question, k=_k, fetch_k=5 * _k
             )
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
@@ -630,7 +655,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             return c
 
-        if disable_summarization:
+        if disable_answer:
             contexts = [
                 Context(
                     context=match.page_content,
@@ -639,6 +664,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         text=match.page_content,
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
+                        vector_id=match.metadata["id"],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
@@ -646,7 +672,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             ]
 
         else:
-            if use_reranker:
+            if reranker:
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
                     model_name="BAAI/bge-reranker-large", max_length=512
@@ -707,8 +733,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None",
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -730,8 +756,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer=answer,
                 key_filter=key_filter,
                 get_callbacks=get_callbacks,
-                disable_summarization=disable_summarization,
-                use_reranker=use_reranker,
+                disable_answer=disable_answer,
+                reranker=reranker,
             )
         )
 
@@ -745,8 +771,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Optional[Answer] = None,
         key_filter: Optional[bool] = None,
         get_callbacks: CallbackFactory = lambda x: None,
-        disable_summarization: bool = False,
-        use_reranker: bool = False,
+        disable_answer: bool = False,
+        reranker: Optional[str] = "None", # Replace this with enum
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -761,15 +787,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 if len(keys) > 0:
                     answer.dockey_filter = keys
+
             answer = await self.aget_evidence(
                 answer,
                 k=k,
                 max_sources=max_sources,
                 marginal_relevance=marginal_relevance,
                 get_callbacks=get_callbacks,
-                disable_summarization=disable_summarization,
-                use_reranker=use_reranker,
+                disable_answer=disable_answer,
+                reranker=reranker,
             )
+
         if self.prompts.pre is not None:
             chain = make_chain(
                 self.prompts.pre,
@@ -781,6 +809,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 question=answer.question, callbacks=get_callbacks("pre")
             )
             answer.context = pre + "\n\n" + answer.context
+
         bib = dict()
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
