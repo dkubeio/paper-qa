@@ -576,9 +576,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
-        import pprint
-        print(f"{pprint.pformat(matches[:1])}")
-
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
