@@ -587,7 +587,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             for m, score in zip(matches[:k], scores[:k]):
                 vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} vectorid:{vector_id} weaviate score:{score}")
+                logging.trace(f"trace_id:{trace_id} id:{vector_id}, score:{score:.2f}"
+                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
