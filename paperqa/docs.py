@@ -262,7 +262,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -302,12 +302,22 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
 
-        # we should use the same encoding for all texts, but the bge-large-en-v1.5 model
-        # has a max length of 512 tokens
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        text_chunks = [{"page": x.name, "text_len": len(x.text),
-                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
-                        "tokens": len(encoding.encode(x.text))} for x in texts]
+        update_texts = []
+        for index, text in enumerate(texts):
+            update_texts.append(text)
+            if text_splitter.count_tokens(text=text.text) < 100:
+                if index > 0:
+                    update_texts[index - 1].text += " "
+                    update_texts[index - 1].text += text.text
+                    update_texts.pop(index)
+
+        # print(f"path: {path} texts: {len(texts)} update_texts: {len(update_texts)}")
+        text_chunks = [{
+            "page": x.name, "text_len": len(x.text),
+            "chunk": x.text, "vector_id": str(uuid.uuid4()),
+            "tokens": text_splitter.count_tokens(text=x.text)
+        } for x in update_texts]
+
         return docname, text_chunks
 
     def add_texts(
