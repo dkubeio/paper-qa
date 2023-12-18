@@ -563,6 +563,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_vector_search: bool = False,
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
+        trace_id: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -580,11 +581,24 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k
             )
         else:
+            # calculate time taken by similarity_search_with_score in milliseconds
+            start_time = datetime.now()
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k
             )
+            end_time = datetime.now()
+            logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+
+            # matches_with_score is a list of tuples (doc, score)
+            # fetch all the scores in a list, sort them in descending order
+            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
+
+            for m, score in zip(matches[:k], scores[:k]):
+                vector_id = m.metadata["_additional"]["id"]
+                logging.trace(f"trace_id:{trace_id} id:{vector_id}, score:{score:.2f}"
+                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -685,6 +699,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         else:
             if reranker:
+                start_time = datetime.now()
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
                     model_name="BAAI/bge-reranker-large", max_length=512
@@ -694,6 +709,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     match.metadata['score'] = score
 
                 matches = sorted(matches, key=lambda x: -x.metadata['score'] if x.metadata['score'] else 0)
+
+                for m in matches:
+                    vector_id = m.metadata["_additional"]["id"]
+                    logging.trace(f"trace_id:{trace_id} rerank-vectorid:{vector_id} reranker score:{m.metadata['score']}")
+
+                end_time = datetime.now()
+                logging.trace(f"trace_id:{trace_id} reranker-time:{(end_time - start_time).microseconds / 1000}ms")
+
                 for i, match in enumerate(matches):
                     logging.info(f"content: {match.page_content[:32]} {match.metadata['score']}")
 
@@ -747,6 +770,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
+        trace_id: Optional[str] = None,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -770,6 +794,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_answer=disable_answer,
                 reranker=reranker,
+                trace_id=trace_id,
             )
         )
 
@@ -785,6 +810,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
+        trace_id: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -808,6 +834,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_answer=disable_answer,
                 reranker=reranker,
+                trace_id=trace_id,
             )
 
         if self.prompts.pre is not None:
@@ -828,6 +855,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 "I cannot answer this question due to insufficient information."
             )
         else:
+            start_time = datetime.now()
             callbacks = get_callbacks("answer")
             qa_chain = make_chain(
                 self.prompts.qa,
@@ -844,6 +872,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
+
+            end_time = datetime.now()
+            logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
+
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
