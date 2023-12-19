@@ -43,6 +43,7 @@ class Text(BaseModel):
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
     doc_vector_ids: Optional[List[str]] = None
+    page_text: Optional[str] = None
 
 
 class PromptCollection(BaseModel):

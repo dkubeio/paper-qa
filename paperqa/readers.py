@@ -38,8 +38,14 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
 
             # create chunks per page
             for text in texts:
-                pdf_texts.append(
-                    Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
+                print(f"text:{text}")
+                if page.find_tables():
+                    pdf_texts.append(
+                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc, page_text=page_text))
+                else:
+                    pdf_texts.append(
+                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
+
 
         if last_text != "":
             pdf_texts.append(
@@ -60,6 +66,7 @@ def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
               overlap: int, text_splitter: TextSplitter=None) -> List[Text]:
     import pypdf
 
+    print("the other code "*5)
     pdfFileObj = open(path, "rb")
     pdfReader = pypdf.PdfReader(pdfFileObj)
     split = ""

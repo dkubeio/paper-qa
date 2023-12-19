@@ -315,7 +315,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         text_chunks = [{
             "page": x.name, "text_len": len(x.text),
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
-            "tokens": text_splitter.count_tokens(text=x.text)
+            "tokens": text_splitter.count_tokens(text=x.text),
+            "page_text": x.page_text,
         } for x in update_texts]
 
         return docname, text_chunks
