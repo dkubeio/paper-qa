@@ -883,8 +883,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             name = c.text.name
             citation = c.text.doc.citation
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            if name_in_text(name, answer_text):
-                bib[name] = citation
+            #if name_in_text(name, answer_text):
+            #   bib[name] = citation
+            bib[name] = citation
         bib_str = "\n\n".join(
             [f"{i+1}. ({k}): {c}" for i, (k, c) in enumerate(bib.items())]
         )
