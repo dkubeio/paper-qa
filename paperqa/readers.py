@@ -13,7 +13,6 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
                    overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
     try:
         pdf_texts: List[Text] = []
-        # text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
         if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,

@@ -31,6 +31,7 @@ class Doc(BaseModel):
 
 class Text(BaseModel):
     text: str
+    text_length: int = 0
     name: str
     doc: Doc
     embeddings: Optional[List[float]] = None
@@ -42,6 +43,8 @@ class Text(BaseModel):
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
     csv_text : Optional[str] = None
+    doc_vector_ids: Optional[List[str]] = None
+
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
