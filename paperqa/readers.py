@@ -153,6 +153,29 @@ def parse_json(
 
     return texts
 
+def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[Text]:
+    with open(path, "r") as f:
+        csv_file_data = f.read()
+
+    
+    if text_splitter is None:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_chars, chunk_overlap=overlap,
+            length_function=len, is_separator_regex=False,
+        )
+    
+    csv_data = csv_file_data.encode("ascii", "ignore")
+    csv_data = csv_data.decode()
+    page_texts = text_splitter.split_text(csv_data)
+   
+    csv_texts : List[Text] = []
+
+    for text in page_texts:
+        csv_texts.append(Text(text=text,csv_text=csv_file_data, name=f"{doc.docname}", doc=doc))
+
+    return csv_texts
+
+
 def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int,
                    token_splitter: TextSplitter = None
 ) -> List[Text]:
@@ -213,6 +236,7 @@ def read_doc(
 
     elif str_path.endswith(".json") and "meta_data.json" not in str_path:
         return parse_json(path, doc, chunk_chars, overlap, text_splitter)
-
+    elif str_path.endswith(".csv"):
+        return parse_csv(path, doc, chunk_chars, overlap, text_splitter)
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap, text_splitter)

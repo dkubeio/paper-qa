@@ -41,7 +41,7 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
-
+    csv_text : Optional[str] = None
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt

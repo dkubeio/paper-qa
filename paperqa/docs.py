@@ -307,13 +307,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = [{"page": x.name, "text_len": len(x.text),
                         "chunk": x.text, "vector_id": str(uuid.uuid4()),
-                        "tokens": len(encoding.encode(x.text))} for x in texts]
+                        "tokens": len(encoding.encode(x.text)), "csv_text": x.csv_text} for x in texts]
         return docname, text_chunks
 
     def add_texts(
         self,
         texts: List[Text],
         doc: Doc,
+        is_csv: Optional[bool] = None,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -341,9 +342,20 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.texts_index is not None:
             try:
                 # TODO: Simplify - super weird
-                vec_store_text_and_embeddings = list(
-                    map(lambda x: (x.text, x.embeddings), texts)
-                )
+                i = 0
+                if is_csv == True:
+                    if i == 0:
+                        print("Inside docs.py creating embeddings")
+                        i = 1
+
+                    # print(f"\n------\nCSV Text : \n{texts[0].csv_text}\n\nEmbeddings : \n{texts[0].embeddings}\n----------------\n")
+                    vec_store_text_and_embeddings = list(
+                        map(lambda x: (x.csv_text, x.embeddings), texts)
+                    )
+                else:
+                    vec_store_text_and_embeddings = list(
+                        map(lambda x: (x.text, x.embeddings), texts)
+                    )
 
                 vector_ids = [x.vector_id for x in texts]
                 self.texts_index.add_embeddings(  # type: ignore
