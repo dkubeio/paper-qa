@@ -31,6 +31,7 @@ class Doc(BaseModel):
 
 class Text(BaseModel):
     text: str
+    text_length: int = 0
     name: str
     doc: Doc
     embeddings: Optional[List[float]] = None
@@ -41,6 +42,7 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
+    doc_vector_ids: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
