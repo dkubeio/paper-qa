@@ -27,7 +27,7 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
             page = fitz_file.load_page(i)
             page_text: str = last_text + ' ' + page.get_text("text", sort=True)
 
-            page_text = page_text.encode("ascii", "ignore")
+            page_text = page_text.replace(u'\xa0', u' ').encode("ascii", "ignore")
             page_text = page_text.decode()
             page_text = page_text.replace('\n', ' ').replace('\r', ' ')
             page_text = re.sub(' +', ' ', page_text)
