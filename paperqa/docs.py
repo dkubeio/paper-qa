@@ -864,22 +864,26 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 system_prompt=self.prompts.system,
             )
             try:
-                answer_text = await qa_chain.arun(
-                    context=answer.context,
-                    answer_length=answer.answer_length,
-                    question=answer.question,
-                    callbacks=callbacks,
-                )
+                for context in answer.contexts:
++                    answer_text = await qa_chain.arun(
++                        context=context.context,
++                        answer_length=answer.answer_length,
++                        question=answer.question,
++                        callbacks=callbacks,
++                    )
++                    answer.answer.append(answer_text)
             except Exception as e:
                 answer_text = str(e)
 
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
 
-        # it still happens
-        if "(Example2012)" in answer_text:
-            answer_text = answer_text.replace("(Example2012)", "")
-        for c in answer.contexts:
+         # it still happens
+        for idx, ans in enumerate(answer.answer):
+            if "(Example2012)" in ans:
+                answer.answer[idx] = ans.replace("(Example2012)", "")
+       # for c in answer.contexts:
+            c = answer.contexts[idx]
             name = c.text.name
             citation = c.text.doc.citation
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)

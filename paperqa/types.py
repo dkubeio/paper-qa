@@ -116,7 +116,7 @@ class Answer(BaseModel):
     """A class to hold the answer to a question."""
 
     question: str
-    answer: str = ""
+    answer: List[str] = []
     context: str = ""
     contexts: List[Context] = []
     references: str = ""
