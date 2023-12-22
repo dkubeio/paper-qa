@@ -31,7 +31,6 @@ class Doc(BaseModel):
 
 class Text(BaseModel):
     text: str
-    text_length: int = 0
     name: str
     doc: Doc
     embeddings: Optional[List[float]] = None
@@ -42,7 +41,7 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
-    doc_vector_ids: Optional[List[str]] = None
+    page_text: Optional[str] = None
 
 
 class PromptCollection(BaseModel):
@@ -104,7 +103,8 @@ class Context(BaseModel):
     context: str
     text: Text
     vector_id: str = ''
-    score: int = 5
+    score: float = 5
+    
 
 
 def __str__(self) -> str:

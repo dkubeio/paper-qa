@@ -262,7 +262,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -302,22 +302,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
 
-        update_texts = []
-        for index, text in enumerate(texts):
-            update_texts.append(text)
-            if text_splitter.count_tokens(text=text.text) < 100:
-                if index > 0:
-                    update_texts[index - 1].text += " "
-                    update_texts[index - 1].text += text.text
-                    update_texts.pop(index)
-
-        # print(f"path: {path} texts: {len(texts)} update_texts: {len(update_texts)}")
-        text_chunks = [{
-            "page": x.name, "text_len": len(x.text),
-            "chunk": x.text, "vector_id": str(uuid.uuid4()),
-            "tokens": text_splitter.count_tokens(text=x.text)
-        } for x in update_texts]
-
+        # we should use the same encoding for all texts, but the bge-large-en-v1.5 model
+        # has a max length of 512 tokens
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        text_chunks = [{"page": x.name, "text_len": len(x.text),
+                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
+                        "tokens": len(encoding.encode(x.text))} for x in texts]
         return docname, text_chunks
 
     def add_texts(
@@ -563,7 +553,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_vector_search: bool = False,
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
-        trace_id: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -581,24 +570,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k
             )
         else:
-            # calculate time taken by similarity_search_with_score in milliseconds
-            start_time = datetime.now()
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k
             )
-            end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
-
-            # matches_with_score is a list of tuples (doc, score)
-            # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-            matches = [match_with_score[0] for match_with_score in matches_with_score]
 
-            for m, score in zip(matches[:k], scores[:k]):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
+            matches = [match_with_score[0] for match_with_score in matches_with_score]
+            scores = [match_with_score[1] for match_with_score in matches_with_score]
+
+
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -681,11 +661,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             return c
 
+        # for match in matches:
+        #     print(match)
         if disable_answer:
+            
             contexts = [
                 Context(
                     context=match.page_content,
-                    score=10,
+                    score=scores[i],
+                    #score=match.score,
                     text=Text(
                         text=match.page_content,
                         name=match.metadata["name"],
@@ -694,12 +678,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
-                for match in matches
+                for i, match in enumerate(matches)
             ]
 
         else:
             if reranker:
-                start_time = datetime.now()
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
                     model_name="BAAI/bge-reranker-large", max_length=512
@@ -709,14 +692,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     match.metadata['score'] = score
 
                 matches = sorted(matches, key=lambda x: -x.metadata['score'] if x.metadata['score'] else 0)
-
-                for m in matches:
-                    vector_id = m.metadata["_additional"]["id"]
-                    logging.trace(f"trace_id:{trace_id} rerank-vectorid:{vector_id} reranker score:{m.metadata['score']}")
-
-                end_time = datetime.now()
-                logging.trace(f"trace_id:{trace_id} reranker-time:{(end_time - start_time).microseconds / 1000}ms")
-
                 for i, match in enumerate(matches):
                     logging.info(f"content: {match.page_content[:32]} {match.metadata['score']}")
 
@@ -752,7 +727,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for c in answer.contexts
             ]
         )
-
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
@@ -770,7 +744,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
-        trace_id: Optional[str] = None,
     ) -> Answer:
         # special case for jupyter notebooks
         if "get_ipython" in globals() or "google.colab" in sys.modules:
@@ -794,7 +767,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_answer=disable_answer,
                 reranker=reranker,
-                trace_id=trace_id,
             )
         )
 
@@ -810,7 +782,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
-        trace_id: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -834,7 +805,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 get_callbacks=get_callbacks,
                 disable_answer=disable_answer,
                 reranker=reranker,
-                trace_id=trace_id,
             )
 
         if self.prompts.pre is not None:
@@ -855,7 +825,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 "I cannot answer this question due to insufficient information."
             )
         else:
-            start_time = datetime.now()
             callbacks = get_callbacks("answer")
             qa_chain = make_chain(
                 self.prompts.qa,
@@ -864,21 +833,20 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 system_prompt=self.prompts.system,
             )
             try:
+                
                 for context in answer.contexts:
-+                    answer_text = await qa_chain.arun(
-+                        context=context.context,
-+                        answer_length=answer.answer_length,
-+                        question=answer.question,
-+                        callbacks=callbacks,
-+                    )
-+                    answer.answer.append(answer_text)
+                    answer_text = 'ans'
+                #     answer_text = await qa_chain.arun(
+                #         context=context.context,
+                #         answer_length=answer.answer_length,
+                #         question=answer.question,
+                #         callbacks=callbacks,
+                #     )
+                    answer.answer.append(answer_text)
+                
             except Exception as e:
                 answer_text = str(e)
-
-            end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
-
-         # it still happens
+        # it still happens
         for idx, ans in enumerate(answer.answer):
             if "(Example2012)" in ans:
                 answer.answer[idx] = ans.replace("(Example2012)", "")
@@ -887,16 +855,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             name = c.text.name
             citation = c.text.doc.citation
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
-            #   bib[name] = citation
-            bib[name] = citation
+            if name_in_text(name, answer_text):
+                bib[name] = citation
         bib_str = "\n\n".join(
             [f"{i+1}. ({k}): {c}" for i, (k, c) in enumerate(bib.items())]
         )
-        formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
+        formatted_answer = f"Question: {answer.question}\n\n{answer.answer}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
-        answer.answer = answer_text
+        #answer.answer = answer_text
         answer.formatted_answer = formatted_answer
         answer.references = bib_str
 

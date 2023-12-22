@@ -13,6 +13,7 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
                    overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
     try:
         pdf_texts: List[Text] = []
+        # text_splitter = TokenTextSplitter(chunk_size=chunk_chars, chunk_overlap=overlap)
         if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
@@ -23,6 +24,11 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
         # with fitz.open(path) as fitz_file:
         fitz_file = fitz.open(path)  # type: ignore
 
+        for page in doc:
+	        tabs = page.find_tables()  
+	        for i,tab in enumerate(tabs):  # iterate over all tables
+		        print(f"Table{i}",type(tabs))
+        
         for i in range(fitz_file.page_count):
             page = fitz_file.load_page(i)
             page_text: str = last_text + ' ' + page.get_text("text", sort=True)
@@ -66,6 +72,14 @@ def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
     pages: List[str] = []
     texts: List[Text] = []
     for i, page in enumerate(pdfReader.pages):
+    #     if(page.findtable()):
+    #         texts.append(
+    #             Text(
+    #                 text = page, name=f"{doc.docname} pages {pg}", doc=doc
+    #             )
+    #         )
+    #         break
+
         split += page.extract_text()
         pages.append(str(i + 1))
         # split could be so long it needs to be split
