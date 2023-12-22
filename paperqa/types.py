@@ -44,6 +44,7 @@ class Text(BaseModel):
     relevant_vectors: Optional[List[str]] = None
     doc_vector_ids: Optional[List[str]] = None
     page_text: Optional[str] = None
+    is_table: Optional[bool] = False
 
 
 class PromptCollection(BaseModel):
