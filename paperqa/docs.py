@@ -355,12 +355,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.texts_index is not None:
             try:
                 # TODO: Simplify - super weird
-                i = 0
                 if is_csv == True:
-                    if i == 0:
-                        print("Inside docs.py creating embeddings")
-                        i = 1
-
                     # print(f"\n------\nCSV Text : \n{texts[0].csv_text}\n\nEmbeddings : \n{texts[0].embeddings}\n----------------\n")
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.csv_text, x.embeddings), texts)
@@ -638,8 +633,41 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         cur_names = [c.text.name for c in answer.contexts]
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
-        # now finally cut down
-        matches = matches[:k]
+        # now fnally cut down
+        matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
+        
+        csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
+        
+        # if csv_sources == 0 or csv_sources == 1:
+        #     if matched_sources[0].endswith('.csv'):
+        #         matches = [matches[0]]
+        #     elif matched_sources[1].endswith('.csv'):
+        #         matches = [matches[1]]
+        #     else:
+        #         matches = matches[:k]
+        # elif csv_sources == 2:
+        #     if matched_sources[0].endswith('.csv') == True and matched_sources[1].endswith('.csv') == True:
+        #         matches = matches[:1]
+        #     elif:
+        #         matches = matches[:2]
+        # else:
+        #     # print("All 3 matches")
+        #     matches = matches[:1]
+
+
+        if csv_sources == 0:
+            matches = matches[:k]
+        elif csv_sources == 3:
+            matches = matches[:1]
+        else:
+            if matched_sources[0].endswith('.csv') == True:
+                matches = matches[:1]
+            elif matched_sources[1].endswith('.csv') == True:
+                matches = [matches[1]]
+            else:
+                matches = matches[:k]
+
+        # matches = matches[:k]
 
         # create score for each match
         for i, match in enumerate(matches):
