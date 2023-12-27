@@ -311,12 +311,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     update_texts[index - 1].text += text.text
                     update_texts.pop(index)
 
-        # print(f"path: {path} texts: {len(texts)} update_texts: {len(update_texts)}")
         text_chunks = [{
             "page": x.name, "text_len": len(x.text),
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
             "tokens": text_splitter.count_tokens(text=x.text),
             "page_text": x.page_text,
+            "is_table": x.is_table,
         } for x in update_texts]
 
         return docname, text_chunks
@@ -626,6 +626,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now finally cut down
         matches = matches[:k]
+        for i, match in enumerate(matches[:max_sources]):
+            if(match.metadata["is_table"] is True):
+                matches = [matches[i]]
+                break
 
         # create score for each match
         for i, match in enumerate(matches):
@@ -742,6 +746,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 # filter out failures
                 contexts = [c for c in results if c is not None]
 
+    
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )

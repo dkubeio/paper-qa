@@ -38,10 +38,9 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
 
             # create chunks per page
             for text in texts:
-                print(f"text:{text}")
                 if page.find_tables():
                     pdf_texts.append(
-                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc, page_text=page_text))
+                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc, page_text=page_text, is_table=True))
                 else:
                     pdf_texts.append(
                         Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
@@ -111,6 +110,8 @@ def parse_txt(
     if html:
         text = html2text(text)
 
+    is_table = 'Y' in path.name
+
     text = text.encode("ascii", "ignore")
     text = text.decode()
     text = text.replace('\n', ' ').replace('\r', ' ')
@@ -124,10 +125,16 @@ def parse_txt(
         )
 
     raw_texts = text_splitter.split_text(text)
-    texts = [
-        Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
-        for i, t in enumerate(raw_texts)
-    ]
+    texts = []
+    for i, t in enumerate(raw_texts):
+        if(is_table is True):
+            texts.append(Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc, page_text=text, is_table=True))
+        else:
+            texts.append(Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc, is_table=False))
+    # texts = [
+    #     Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
+    #     for i, t in enumerate(raw_texts)
+    # ]
     return texts
 
 def parse_json(
@@ -152,6 +159,7 @@ def parse_json(
         )
 
     raw_texts = text_splitter.split_text(text)
+    
     texts = [
         Text(text=t, name=f"{doc_name}", doc=doc)
         for i, t in enumerate(raw_texts)
