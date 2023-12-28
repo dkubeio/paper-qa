@@ -110,8 +110,9 @@ def parse_txt(
     if html:
         text = html2text(text)
 
-    is_table = 'Y' in path.name
-
+    import os
+    end_path = os.path.basename(path)
+    is_table = 'Y' in end_path
     text = text.encode("ascii", "ignore")
     text = text.decode()
     text = text.replace('\n', ' ').replace('\r', ' ')
@@ -148,9 +149,22 @@ def parse_json(
         with open(path, encoding="utf-8", errors="ignore") as f:
             file_contents = f.read()
 
+    import os
+    end_path = os.path.basename(path)
+    is_table = 'Y' in end_path
+
     json_contents = json.loads(file_contents)
-    text = json_contents['text']
-    doc_name = json_contents['url']
+    if 'text' in json_contents:
+        text = json_contents['text']
+    else:
+        text = json_contents['page_text']
+    
+    if 'url' in json_contents:
+        doc_name = json_contents['url']
+    else:
+        doc_name = end_path
+    
+    page_text = json_contents['page_text']
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -159,11 +173,17 @@ def parse_json(
         )
 
     raw_texts = text_splitter.split_text(text)
-    
-    texts = [
-        Text(text=t, name=f"{doc_name}", doc=doc)
-        for i, t in enumerate(raw_texts)
-    ]
+
+    texts = []
+    for i, t in enumerate(raw_texts):
+        if(is_table is True):
+            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, page_text=page_text, is_table=True))
+        else:
+            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, is_table=False))
+    # texts = [
+    #     Text(text=t, name=f"{doc_name}", doc=doc)
+    #     for i, t in enumerate(raw_texts)
+    # ]
 
     return texts
 
