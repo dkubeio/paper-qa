@@ -106,6 +106,7 @@ class Context(BaseModel):
     text: Text
     vector_id: str = ''
     score: int = 5
+    weaviate_score: float = 0.0
 
 
 def __str__(self) -> str:

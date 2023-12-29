@@ -596,6 +596,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k
             )
+            logging.trace(f"length of mathe with score: {len(matches_with_score)}")
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
@@ -605,10 +606,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
-            for m, score in zip(matches[:k], scores[:k]):
+            rank = 1
+            for m, score in zip(matches, scores):
                 vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} id:{vector_id}, score:{score:.2f}"
+                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}")
+                rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -729,6 +732,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 Context(
                     context=match.page_content,
                     score=10,
+                    weaviate_score=scores[idx],
                     text=Text(
                         text=match.page_content,
                         name=match.metadata["name"],
@@ -737,7 +741,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
-                for match in matches
+                for idx, match in enumerate(matches)
             ]
 
         else:
@@ -907,6 +911,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 system_prompt=self.prompts.system,
             )
             try:
+                logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
