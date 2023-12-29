@@ -319,7 +319,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
             "tokens": text_splitter.count_tokens(text=x.text),
             "csv_text": x.csv_text,
-            } for x in texts]
+        } for x in update_texts]
 
         return docname, text_chunks
 
