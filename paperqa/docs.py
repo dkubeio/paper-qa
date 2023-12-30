@@ -288,7 +288,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             docname = f"{author}{year}"
 
         docname = self._get_unique_name(docname)
-
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
@@ -311,14 +310,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     update_texts[index - 1].text += text.text
                     update_texts.pop(index)
 
-        # we should use the same encoding for all texts, but the bge-large-en-v1.5 model
-        # has a max length of 512 tokens
+        if update_texts and Path(path).suffix == ".json":
+            docname = update_texts[0].name
+
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = [{
             "page": x.name, "text_len": len(x.text),
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
             "tokens": text_splitter.count_tokens(text=x.text),
-            "csv_text": x.csv_text,
+            "csv_text": x.csv_text, "docname" : docname,
         } for x in update_texts]
 
         return docname, text_chunks
