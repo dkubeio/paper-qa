@@ -99,6 +99,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docs = {}
         self.docnames = set()
 
+    def update_memoryllm(self, memoryllm):
+        self.memory_model = memoryllm
+
     def update_llm(
         self,
         llm: Union[BaseLanguageModel, str],
