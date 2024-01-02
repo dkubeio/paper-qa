@@ -288,7 +288,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             docname = f"{author}{year}"
 
         docname = self._get_unique_name(docname)
-
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
@@ -311,11 +310,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     update_texts[index - 1].text += text.text
                     update_texts.pop(index)
 
-        # print(f"path: {path} texts: {len(texts)} update_texts: {len(update_texts)}")
+        if update_texts and Path(path).suffix == ".json":
+            docname = update_texts[0].name
+
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = [{
             "page": x.name, "text_len": len(x.text),
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
-            "tokens": text_splitter.count_tokens(text=x.text)
+            "tokens": text_splitter.count_tokens(text=x.text),
+            "csv_text": x.csv_text, "docname" : docname,
         } for x in update_texts]
 
         return docname, text_chunks
@@ -324,6 +327,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self,
         texts: List[Text],
         doc: Doc,
+        is_csv: Optional[bool] = None,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -351,9 +355,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.texts_index is not None:
             try:
                 # TODO: Simplify - super weird
-                vec_store_text_and_embeddings = list(
-                    map(lambda x: (x.text, x.embeddings), texts)
-                )
+                if is_csv == True:
+                    vec_store_text_and_embeddings = list(
+                        map(lambda x: (x.csv_text, x.embeddings), texts)
+                    )
+                else:
+                    vec_store_text_and_embeddings = list(
+                        map(lambda x: (x.text, x.embeddings), texts)
+                    )
 
                 vector_ids = [x.vector_id for x in texts]
                 self.texts_index.add_embeddings(  # type: ignore
@@ -586,6 +595,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k
             )
+            logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
@@ -595,10 +605,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
-            for m, score in zip(matches[:k], scores[:k]):
+            rank = 1
+            for m, score in zip(matches, scores):
                 vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} id:{vector_id}, score:{score:.2f}"
+                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}")
+                rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -623,8 +635,24 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         cur_names = [c.text.name for c in answer.contexts]
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
-        # now finally cut down
-        matches = matches[:k]
+        # now fnally cut down
+        matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
+        
+        csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
+        
+        if csv_sources == 0:
+            matches = matches[:k]
+        elif csv_sources == 3:
+            matches = matches[:1]
+        else:
+            if matched_sources[0].endswith('.csv') == True:
+                matches = matches[:1]
+            elif matched_sources[1].endswith('.csv') == True:
+                matches = [matches[1]]
+            else:
+                matches = matches[:k]
+
+        # matches = matches[:k]
 
         # create score for each match
         for i, match in enumerate(matches):
@@ -686,6 +714,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 Context(
                     context=match.page_content,
                     score=10,
+                    weaviate_score=scores[idx],
                     text=Text(
                         text=match.page_content,
                         name=match.metadata["name"],
@@ -694,7 +723,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
-                for match in matches
+                for idx, match in enumerate(matches)
             ]
 
         else:
@@ -864,6 +893,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 system_prompt=self.prompts.system,
             )
             try:
+                logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,

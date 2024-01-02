@@ -42,6 +42,7 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
+    csv_text : Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
 
 
@@ -105,6 +106,7 @@ class Context(BaseModel):
     text: Text
     vector_id: str = ''
     score: int = 5
+    weaviate_score: float = 0.0
 
 
 def __str__(self) -> str:
