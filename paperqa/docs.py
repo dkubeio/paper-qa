@@ -356,7 +356,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             try:
                 # TODO: Simplify - super weird
                 if is_csv == True:
-                    # print(f"\n------\nCSV Text : \n{texts[0].csv_text}\n\nEmbeddings : \n{texts[0].embeddings}\n----------------\n")
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.csv_text, x.embeddings), texts)
                     )
@@ -596,7 +595,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k
             )
-            logging.trace(f"length of mathe with score: {len(matches_with_score)}")
+            logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
@@ -641,23 +640,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         
         csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
         
-        # if csv_sources == 0 or csv_sources == 1:
-        #     if matched_sources[0].endswith('.csv'):
-        #         matches = [matches[0]]
-        #     elif matched_sources[1].endswith('.csv'):
-        #         matches = [matches[1]]
-        #     else:
-        #         matches = matches[:k]
-        # elif csv_sources == 2:
-        #     if matched_sources[0].endswith('.csv') == True and matched_sources[1].endswith('.csv') == True:
-        #         matches = matches[:1]
-        #     elif:
-        #         matches = matches[:2]
-        # else:
-        #     # print("All 3 matches")
-        #     matches = matches[:1]
-
-
         if csv_sources == 0:
             matches = matches[:k]
         elif csv_sources == 3:
