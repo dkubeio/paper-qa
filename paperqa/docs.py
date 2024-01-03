@@ -14,7 +14,7 @@ import tiktoken
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.base import Embeddings
+from langchain.embeddings.base import Embeddings    
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
@@ -314,9 +314,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             docname = update_texts[0].name
 
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
-
+        text_chunks = []
         for x in update_texts:
-            if x.docname.endswith('.csv'):
+            if x.doc.docname.endswith('.csv'):
                 text_chunks.append({
                     "page": x.name, "text_len": len(x.text),
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
@@ -329,7 +329,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "page_text": x.page_text,
-                    "is_table": x.is_table,
+                    "is_table": x.is_table,"docname":docname
                 }) 
 
         return docname, text_chunks
