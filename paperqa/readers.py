@@ -164,7 +164,8 @@ def parse_json(
     else:
         doc_name = end_path
     
-    page_text = json_contents['page_text']
+    if is_table == True:
+        page_text = json_contents['page_text']
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
