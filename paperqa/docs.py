@@ -599,7 +599,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter={'path': ['categories'],
                               'operator': 'ContainsAll',
-                              'valueText': categories},
+                              "valueText": list(categories)}
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
