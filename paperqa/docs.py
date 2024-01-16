@@ -99,6 +99,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docs = {}
         self.docnames = set()
 
+    def update_memoryllm(self, memoryllm):
+        self.memory_model = memoryllm
+
     def update_llm(
         self,
         llm: Union[BaseLanguageModel, str],
@@ -901,6 +904,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             start_time = datetime.now()
             callbacks = get_callbacks("answer")
+            if self.memory_model:
+                memory_str = str(self.memory_model.load_memory_variables({})["memory"])
+                logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
+
             qa_chain = make_chain(
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
