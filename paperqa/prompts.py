@@ -91,3 +91,15 @@ default_system_prompt = (
     "You are a Retrieval Augmented Generation chatbot. "
     "Think step by step and answer in a direct and concise tone. "
 )
+
+followup_system_prompt = PromptTemplate(
+    input_variables=["question", "previous_question"],
+    template="You are an expert synthesizer for conversational chat. "
+    "The question below is a followup question based on the previous chat. "
+    "Please rephrase the question by synthesizing the question and the previous chat. "
+    "Make the new question within 25 words."
+    "Don't use sources and references for the new question."
+    "Don't write anything except the question."
+    "Question:  {question}\n\n"
+    "Chat: Question: {previous_question}",
+)
