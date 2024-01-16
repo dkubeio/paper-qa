@@ -1,13 +1,60 @@
 import json
-import time
+import re
+import traceback
 from pathlib import Path
 from typing import List
+
 import fitz
 from html2text import html2text
-from langchain.text_splitter import TextSplitter
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import TextSplitter
+from unstructured.partition.pdf import partition_pdf
+
 from .types import Doc, Text
-import re
+
+
+def parse_pdf_unstructured(path: Path, doc: Doc, chunk_chars: int,
+                           overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
+    pdf_texts: List[Text] = []
+    try:
+        if text_splitter is None:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_chars, chunk_overlap=overlap,
+                length_function=len, is_separator_regex=False,
+            )
+
+        elements = partition_pdf(filename=path, infer_table_structure=True)
+        page_dict = {}
+        for el in elements:
+            el_pg_no = el.metadata.page_number
+            if el_pg_no not in page_dict:
+                page_dict[el.metadata.page_number] = {'page_text': '', 'tables': [], 'is_table': 'N'}
+
+            if el.category == "Table":
+                page_dict[el_pg_no]['tables'].append(el.metadata.text_as_html)
+                page_dict[el_pg_no]['is_table'] = 'Y'
+                page_dict[el_pg_no]['page_text'] += f"{el.metadata.text_as_html}\n"
+
+            else:
+                page_dict[el_pg_no]['page_text'] += f"{el.text}\n"
+
+        for page_num, contents in page_dict.items():
+            if contents['is_table'] == 'Y':
+                page_texts = text_splitter.split_text(contents['page_text'])
+                for text in page_texts:
+                    pdf_texts.append(
+                        Text(text=text, name=f"{doc.docname} page {page_num}", doc=doc))
+            else:
+                pdf_texts.append(
+                    Text(text=contents['page_text'], name=f"{doc.docname} page {page_num}", doc=doc))
+        exit(0)
+
+    except Exception as e:
+        print(f"Error in parse_pdf_fitz: {e}")
+        traceback.print_exc()
+
+    return pdf_texts
+
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
                    overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
@@ -50,10 +97,7 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
         return pdf_texts
     except Exception as e:
         print(f"Error in parse_pdf_fitz: {e}")
-        import traceback
         traceback.print_exc()
-
-
 
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
@@ -156,17 +200,17 @@ def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:Te
     with open(path, "r") as f:
         csv_file_data = f.read()
 
-    
+
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_chars, chunk_overlap=overlap,
             length_function=len, is_separator_regex=False,
         )
-    
+
     csv_data = csv_file_data.encode("ascii", "ignore")
     csv_data = csv_data.decode()
     page_texts = text_splitter.split_text(csv_data)
-   
+
     csv_texts : List[Text] = []
 
     for text in page_texts:
@@ -215,6 +259,7 @@ def read_doc(
     overlap: int = 100,
     force_pypdf: bool = False,
     text_splitter: TextSplitter = None,
+    use_unstructured: bool = False,
 ) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
@@ -223,7 +268,11 @@ def read_doc(
             return parse_pdf(path, doc, chunk_chars, overlap)
 
         try:
-            return parse_pdf_fitz(path, doc, chunk_chars, overlap, text_splitter)
+            if use_unstructured:
+                return parse_pdf_unstructured(path, doc, chunk_chars, overlap, text_splitter)
+            else:
+                return parse_pdf_fitz(path, doc, chunk_chars, overlap, text_splitter)
+
         except ImportError:
             return parse_pdf(path, doc, chunk_chars, overlap, text_splitter)
 
