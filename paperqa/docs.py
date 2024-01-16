@@ -1,6 +1,7 @@
 import asyncio
+import json
+import logging
 import os
-import pprint
 import re
 import sys
 import tempfile
@@ -9,22 +10,21 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
-import json
-import tiktoken
+import glob
+import traceback
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.base import Embeddings    
+from langchain.embeddings.base import Embeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
+from langchain.text_splitter import TextSplitter
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
-from langchain.text_splitter import TextSplitter
-import logging
 from sentence_transformers import CrossEncoder
-from uuid import uuid4
+from unstructured.partition.pdf import partition_pdf
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -38,7 +38,6 @@ from .utils import (
     maybe_is_pdf,
     maybe_is_text,
     md5sum,
-    name_in_text,
 )
 
 
@@ -240,6 +239,120 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return docname, text_chunks
         return None, None
 
+    def unstructured_process_output(
+        self,
+        path: Path,
+        citation: Optional[str] = None,
+        docname: Optional[str] = None,
+        disable_check: bool = False,
+        dockey: Optional[DocKey] = None,
+        chunk_chars: int = 3000,
+        overlap=100,
+        text_splitter: TextSplitter = None,
+        use_unstructured: bool = False,
+        base_dir: Path = None,
+    ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
+
+        if dockey is None:
+            dockey = md5sum(path)
+
+        # get all the files in the brase_dir
+        page_doc_list = []
+        page_doc_list.extend(
+            glob.glob(os.path.join(base_dir/ "unstructured", "**/" + "*.json"), recursive=True)
+        )
+
+        for idx, page_doc in enumerate(page_doc_list):
+            print(f"page_doc : {page_doc}")
+
+            try:
+                with open(page_doc) as f:
+                    file_contents = json.loads(f.read())
+            except UnicodeDecodeError:
+                with open(page_doc, encoding="utf-8", errors="ignore") as f:
+                    file_contents = json.loads(f.read())
+
+            try:
+                docname = self._get_unique_name(docname)
+                self.docnames.add(docname)
+                doc = Doc(docname=docname, citation=citation, dockey=dockey)
+
+                is_table = True if file_contents.get('is_table') == 'Y' else False
+                page_text = file_contents.get('page_text')
+                page_text = page_text.encode("ascii", "ignore").decode()
+
+                texts = []
+                for text in text_splitter.split_text(page_text):
+                    texts.append({
+                        "page": path, "text_len": len(text),
+                        "chunk": text, "vector_id": str(uuid.uuid4()),
+                        "tokens": text_splitter.count_tokens(text=text),
+                        "page_text": page_text,
+                        "is_table": is_table, "docname": docname
+                    })
+
+                page_chunks_dir = base_dir / f"chunks_{idx}"
+                page_chunks_dir.mkdir(parents=True, exist_ok=True)
+                chunks_file = page_chunks_dir / "text_chunks.json"
+
+                with open(chunks_file, 'w') as f:
+                    json.dump(texts, f, indent=4)
+
+            except Exception as e:
+                print(f"Error in unstructured_process_output: {e}")
+                traceback.print_exc()
+
+
+    def unstructured_process_pdf(
+            self,
+            path: Path,
+            citation: Optional[str] = None,
+            docname: Optional[str] = None,
+            disable_check: bool = False,
+            dockey: Optional[DocKey] = None,
+            chunk_chars: int = 3000,
+            overlap=100,
+            text_splitter: TextSplitter = None,
+            use_unstructured: bool = False,
+            base_dir: Path = None,
+    ) -> None:
+        pdf_texts: List[Text] = []
+        try:
+            path = Path(path)
+            if text_splitter is None:
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=chunk_chars, chunk_overlap=overlap,
+                    length_function=len, is_separator_regex=False,
+                )
+
+            elements = partition_pdf(filename=path, infer_table_structure=True)
+            page_dict = {}
+            for el in elements:
+                el_pg_no = el.metadata.page_number
+                if el_pg_no not in page_dict:
+                    page_dict[el.metadata.page_number] = {'page_text': '', 'tables': [], 'is_table': 'N'}
+
+                if el.category == "Table":
+                    page_dict[el_pg_no]['tables'].append(el.metadata.text_as_html)
+                    page_dict[el_pg_no]['page_no'] = el_pg_no
+                    page_dict[el_pg_no]['is_table'] = 'Y'
+                    page_dict[el_pg_no]['page_text'] += f"{el.metadata.text_as_html}\n"
+
+                else:
+                    page_dict[el_pg_no]['page_text'] += f"{el.text}\n"
+
+            filename = path.name
+            for page, content in page_dict.items():
+                output_dir = base_dir / "unstructured"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_file_path = output_dir / f"page_{page}.json"
+
+                with open(f"{output_file_path}", 'w') as file:
+                    file.write(json.dumps(content, indent=4))
+
+        except Exception as e:
+            print(f"Error in unstructured_process_pdf: {e}")
+            traceback.print_exc()
 
     def generate_chunks(
         self,
@@ -252,6 +365,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         overlap=100,
         text_splitter: TextSplitter = None,
         use_unstructured: bool = False,
+        base_dir: Path = None,
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
@@ -266,7 +380,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
+                             base_dir=base_dir)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -295,7 +410,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
-                         use_unstructured=use_unstructured)
+                         use_unstructured=use_unstructured, base_dir=base_dir)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -318,7 +433,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if update_texts and Path(path).suffix == ".json":
             docname = update_texts[0].name
 
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = []
         for x in update_texts:
             if x.doc.docname.endswith('.csv'):
@@ -513,7 +627,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
     def build_doc_index(self):
         from collections import namedtuple
-        from json import JSONEncoder
 
         def docDecoder(dictobj):
             return namedtuple('Doc', dictobj.keys())(*dictobj.values())

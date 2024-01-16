@@ -8,52 +8,8 @@ import fitz
 from html2text import html2text
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TextSplitter
-from unstructured.partition.pdf import partition_pdf
 
 from .types import Doc, Text
-
-
-def parse_pdf_unstructured(path: Path, doc: Doc, chunk_chars: int,
-                           overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
-    pdf_texts: List[Text] = []
-    try:
-        if text_splitter is None:
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_chars, chunk_overlap=overlap,
-                length_function=len, is_separator_regex=False,
-            )
-
-        elements = partition_pdf(filename=path, infer_table_structure=True)
-        page_dict = {}
-        for el in elements:
-            el_pg_no = el.metadata.page_number
-            if el_pg_no not in page_dict:
-                page_dict[el.metadata.page_number] = {'page_text': '', 'tables': [], 'is_table': 'N'}
-
-            if el.category == "Table":
-                page_dict[el_pg_no]['tables'].append(el.metadata.text_as_html)
-                page_dict[el_pg_no]['is_table'] = 'Y'
-                page_dict[el_pg_no]['page_text'] += f"{el.metadata.text_as_html}\n"
-
-            else:
-                page_dict[el_pg_no]['page_text'] += f"{el.text}\n"
-
-        for page_num, contents in page_dict.items():
-            if contents['is_table'] == 'Y':
-                page_texts = text_splitter.split_text(contents['page_text'])
-                for text in page_texts:
-                    pdf_texts.append(
-                        Text(text=text, name=f"{doc.docname} page {page_num}", doc=doc))
-            else:
-                pdf_texts.append(
-                    Text(text=contents['page_text'], name=f"{doc.docname} page {page_num}", doc=doc))
-        exit(0)
-
-    except Exception as e:
-        print(f"Error in parse_pdf_fitz: {e}")
-        traceback.print_exc()
-
-    return pdf_texts
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
@@ -193,23 +149,9 @@ def parse_json(
         with open(path, encoding="utf-8", errors="ignore") as f:
             file_contents = f.read()
 
-    import os
-    end_path = os.path.basename(path)
-    is_table = 'Y' in end_path
-
     json_contents = json.loads(file_contents)
-    if 'text' in json_contents:
-        text = json_contents['text']
-    else:
-        text = json_contents['page_text']
-    
-    if 'url' in json_contents:
-        doc_name = json_contents['url']
-    else:
-        doc_name = end_path
-    
-    if is_table == True:
-        page_text = json_contents['page_text']
+    text = json_contents['text']
+    doc_name = json_contents['url']
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -218,17 +160,10 @@ def parse_json(
         )
 
     raw_texts = text_splitter.split_text(text)
-
-    texts = []
-    for i, t in enumerate(raw_texts):
-        if(is_table is True):
-            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, page_text=page_text, is_table=True))
-        else:
-            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, is_table=False))
-    # texts = [
-    #     Text(text=t, name=f"{doc_name}", doc=doc)
-    #     for i, t in enumerate(raw_texts)
-    # ]
+    texts = [
+        Text(text=t, name=f"{doc_name}", doc=doc)
+        for i, t in enumerate(raw_texts)
+    ]
 
     return texts
 
@@ -295,7 +230,6 @@ def read_doc(
     overlap: int = 100,
     force_pypdf: bool = False,
     text_splitter: TextSplitter = None,
-    use_unstructured: bool = False,
 ) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
@@ -304,11 +238,7 @@ def read_doc(
             return parse_pdf(path, doc, chunk_chars, overlap)
 
         try:
-            if use_unstructured:
-                return parse_pdf_unstructured(path, doc, chunk_chars, overlap, text_splitter)
-            else:
-                return parse_pdf_fitz(path, doc, chunk_chars, overlap, text_splitter)
-
+            return parse_pdf_fitz(path, doc, chunk_chars, overlap, text_splitter)
         except ImportError:
             return parse_pdf(path, doc, chunk_chars, overlap, text_splitter)
 
