@@ -85,8 +85,13 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
 
             # create chunks per page
             for text in texts:
-                pdf_texts.append(
-                    Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
+                if page.find_tables():
+                    pdf_texts.append(
+                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc, page_text=page_text, is_table=True))
+                else:
+                    pdf_texts.append(
+                        Text(text=text, name=f"{doc.docname} page {i+1}", doc=doc))
+
 
         if last_text != "":
             pdf_texts.append(
@@ -104,6 +109,7 @@ def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
               overlap: int, text_splitter: TextSplitter=None) -> List[Text]:
     import pypdf
 
+    print("the other code "*5)
     pdfFileObj = open(path, "rb")
     pdfReader = pypdf.PdfReader(pdfFileObj)
     split = ""
@@ -148,6 +154,9 @@ def parse_txt(
     if html:
         text = html2text(text)
 
+    import os
+    end_path = os.path.basename(path)
+    is_table = 'Y' in end_path
     text = text.encode("ascii", "ignore")
     text = text.decode()
     text = text.replace('\n', ' ').replace('\r', ' ')
@@ -161,10 +170,16 @@ def parse_txt(
         )
 
     raw_texts = text_splitter.split_text(text)
-    texts = [
-        Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
-        for i, t in enumerate(raw_texts)
-    ]
+    texts = []
+    for i, t in enumerate(raw_texts):
+        if(is_table is True):
+            texts.append(Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc, page_text=text, is_table=True))
+        else:
+            texts.append(Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc, is_table=False))
+    # texts = [
+    #     Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
+    #     for i, t in enumerate(raw_texts)
+    # ]
     return texts
 
 def parse_json(
@@ -178,9 +193,23 @@ def parse_json(
         with open(path, encoding="utf-8", errors="ignore") as f:
             file_contents = f.read()
 
+    import os
+    end_path = os.path.basename(path)
+    is_table = 'Y' in end_path
+
     json_contents = json.loads(file_contents)
-    text = json_contents['text']
-    doc_name = json_contents['url']
+    if 'text' in json_contents:
+        text = json_contents['text']
+    else:
+        text = json_contents['page_text']
+    
+    if 'url' in json_contents:
+        doc_name = json_contents['url']
+    else:
+        doc_name = end_path
+    
+    if is_table == True:
+        page_text = json_contents['page_text']
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -189,10 +218,17 @@ def parse_json(
         )
 
     raw_texts = text_splitter.split_text(text)
-    texts = [
-        Text(text=t, name=f"{doc_name}", doc=doc)
-        for i, t in enumerate(raw_texts)
-    ]
+
+    texts = []
+    for i, t in enumerate(raw_texts):
+        if(is_table is True):
+            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, page_text=page_text, is_table=True))
+        else:
+            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, is_table=False))
+    # texts = [
+    #     Text(text=t, name=f"{doc_name}", doc=doc)
+    #     for i, t in enumerate(raw_texts)
+    # ]
 
     return texts
 
