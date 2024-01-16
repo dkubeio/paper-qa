@@ -950,5 +950,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             self.memory_model.save_context(
                 {"Question": answer.question}, {"Answer": answer.answer}
             )
+            self.memory_model.clear(self.memory_model.k)
 
         return answer
