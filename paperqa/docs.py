@@ -886,6 +886,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             answer.context = pre + "\n\n" + answer.context
 
+
         bib = dict()
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
@@ -898,6 +899,24 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory_str = str(self.memory_model.load_memory_variables({})["memory"])
                 logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
+            if(self.memory_model.buffer):
+                followup_chain = make_chain(
+                    self.prompts.followup,
+                    cast(BaseLanguageModel, self.llm),
+                    # memory=self.memory_model,
+                    system_prompt=self.prompts.system,
+                )
+                previous_question = self.memory_model.buffer[-2].content
+                try:
+                    logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+                    followup_question = await followup_chain.arun(
+                    previous_question=previous_question,
+                    question=answer.question,
+                    # callbacks=callbacks,
+                    )
+                except Exception as e:
+                    followup_question = str(e)
+                answer.question = followup_question
             qa_chain = make_chain(
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
@@ -914,7 +933,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
-
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
 

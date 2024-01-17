@@ -15,6 +15,7 @@ from .prompts import (
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
+    followup_system_prompt
 )
 
 StrPath = Union[str, Path]
@@ -50,6 +51,7 @@ class Text(BaseModel):
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
     qa: PromptTemplate = qa_prompt
+    followup: Optional[PromptTemplate] = followup_system_prompt
     select: PromptTemplate = select_paper_prompt
     cite: PromptTemplate = citation_prompt
     pre: Optional[PromptTemplate] = None
@@ -97,6 +99,14 @@ class PromptCollection(BaseModel):
             attrs = [a.name for a in Answer.__fields__.values()]
             if not set(v.input_variables).issubset(attrs):
                 raise ValueError(f"Post prompt must have input variables: {attrs}")
+        return v
+
+    @validator("followup")
+    def check_followup(cls, v: PromptTemplate) -> PromptTemplate:
+        if not set(v.input_variables).issubset(set(followup_system_prompt.input_variables)):
+            raise ValueError(
+                f"followup_system_prompt prompt can only have variables: {summary_prompt.input_variables}"
+            )
         return v
 
 
