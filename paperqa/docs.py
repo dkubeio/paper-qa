@@ -772,9 +772,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
 
         csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
-
+        
         if csv_sources == 0:
-            matches = matches[:k]
+            check_table = False
+            for i, match in enumerate(matches[:max_sources]):
+                if(match.metadata["is_table"] is True) :
+                    check_table = True
+                    break
+
+            if check_table == True:
+                if i == 2:
+                    matches = [matches[0],matches[i]]
+                else:
+                    matches = matches[:(i+1)]
+            else:
+                matches = matches[:max_sources]
         elif csv_sources == 3:
             matches = matches[:1]
         else:
@@ -783,13 +795,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             elif matched_sources[1].endswith('.csv') == True:
                 matches = [matches[1]]
             else:
-                matches = matches[:k]
+                matches = [matches[2]]
 
-        # matches = matches[:k]
-        for i, match in enumerate(matches[:max_sources]):
-            if(match.metadata["is_table"] is True):
-                matches = [matches[i]]
-                break
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
