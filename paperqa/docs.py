@@ -273,7 +273,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     file_contents = json.loads(f.read())
 
             try:
-                docname = self._get_unique_name(docname)
+                # docname = self._get_unique_name(docname)
                 self.docnames.add(docname)
                 doc = Doc(docname=docname, citation=citation, dockey=dockey)
 
@@ -409,8 +409,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
-                         use_unstructured=use_unstructured, base_dir=base_dir)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
