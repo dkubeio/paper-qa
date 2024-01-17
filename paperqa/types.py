@@ -45,6 +45,9 @@ class Text(BaseModel):
     relevant_vectors: Optional[List[str]] = None
     csv_text: Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
+    page_text: Optional[str] = None
+    is_table: Optional[bool] = False
+    is_pdf: Optional[bool] = False
     categories: Optional[List[str]] = None
 
 
