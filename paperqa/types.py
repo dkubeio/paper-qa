@@ -42,8 +42,9 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
-    csv_text : Optional[str] = None
+    csv_text: Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
+    categories: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
@@ -75,7 +76,7 @@ class PromptCollection(BaseModel):
     @validator("select")
     def check_select(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(
-            set(select_paper_prompt.input_variables)
+                set(select_paper_prompt.input_variables)
         ):
             raise ValueError(
                 f"Select prompt can only have variables: {select_paper_prompt.input_variables}"

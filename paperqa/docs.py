@@ -316,7 +316,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if update_texts and Path(path).suffix == ".json":
             docname = update_texts[0].name
 
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         text_chunks = [{
             "page": x.name, "text_len": len(x.text),
             "chunk": x.text, "vector_id": str(uuid.uuid4()),
@@ -403,7 +402,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # Delete all texts with the dockey attribute
             if self.texts_index is not None:
                 self.texts_index.delete_by_attribute({'dockey':dockey})
-                                                                           
+
         del self.docs[dockey]
         self.deleted_dockeys.add(dockey)
 
@@ -515,7 +514,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 properties=['dockey'],
                 limit = batch_size,
                 cursor = cursor)
-            
+
             for doc in docs:
                 new_doc = json.loads(doc.page_content, object_hook=docDecoder)
                 self.docs[doc.metadata['dockey']] = new_doc
@@ -523,7 +522,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             if len(docs) < batch_size:
                 break
-    
+
     def clear_memory(self):
         """Clear the memory of the model."""
         if self.memory_model is not None:
@@ -576,6 +575,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
         trace_id: Optional[str] = None,
+        categories: Optional[List[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -596,7 +596,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
             matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k
+                answer.question, k=_k, fetch_k=5 * _k,
+                where_filter={'path': ['categories'],
+                              'operator': 'ContainsAll',
+                              "valueText": list(categories)}
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
@@ -640,9 +643,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now fnally cut down
         matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
-        
+
         csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
-        
+
         if csv_sources == 0:
             matches = matches[:k]
         elif csv_sources == 3:
@@ -843,6 +846,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
+        categories: Optional[List[str]] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -867,6 +871,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 disable_answer=disable_answer,
                 reranker=reranker,
                 trace_id=trace_id,
+                categories=categories,
             )
 
         if self.prompts.pre is not None:
