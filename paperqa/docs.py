@@ -683,7 +683,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             elif matched_sources[1].endswith('.csv') == True:
                 matches = [matches[1]]
             else:
-                matches = matches[:max_sources]
+                matches = [matches[2]]
 
         # pg_cnt = [(m.page_content, m.metadata['doc']['citation']) for m in matches]
         # for p in pg_cnt:
