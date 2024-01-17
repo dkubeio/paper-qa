@@ -654,17 +654,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         
         csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
       
-        # print(f"csv sources : {csv_sources}")
         if csv_sources == 0:
-            # matches = matches[:k]
-            # for i, match in enumerate(matches[:max_sources]):
-            #     if(match.metadata["is_table"] is True) or (match.metadata['doc']['citation'].endswith('.csv')==True) :
-            #         # matches = [matches[i]]
-            #         break
             check_table = False
             for i, match in enumerate(matches[:max_sources]):
                 if(match.metadata["is_table"] is True) :
-                    # matches = [matches[i]]
                     check_table = True
                     break
 
@@ -685,10 +678,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             else:
                 matches = [matches[2]]
 
-        # pg_cnt = [(m.page_content, m.metadata['doc']['citation']) for m in matches]
-        # for p in pg_cnt:
-        #     print(f"\n-----------------\n{p[0]}\n{p[1]}\n-----------------\n")
-        # print(len(matches))
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
