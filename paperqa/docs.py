@@ -894,8 +894,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory_str = str(self.memory_model.load_memory_variables({})["memory"])
                 logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
-            if(len(self.memory_model.buffer) != 0):
-                # print(f"My follow up question:{answer.question}")
+            if(self.memory_model.buffer):
                 followup_chain = make_chain(
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
@@ -903,18 +902,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     system_prompt=self.prompts.system,
                 )
                 previous_question = self.memory_model.buffer[-2].content
-                # print(f"Previous Question {previous_question}")
                 try:
                     logging.trace(f"trace_id:{trace_id} context:{answer.context}")
-                    new_followup_question = await followup_chain.arun(
+                    followup_question = await followup_chain.arun(
                     previous_question=previous_question,
                     question=answer.question,
                     # callbacks=callbacks,
                     )
                 except Exception as e:
-                    new_followup_question = str(e)
-                answer.question = new_followup_question
-                # print(f"llm follow up question: {answer.question}")
+                    followup_question = str(e)
+                answer.question = followup_question
             qa_chain = make_chain(
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
