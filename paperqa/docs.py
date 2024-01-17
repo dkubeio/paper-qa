@@ -1037,7 +1037,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory_str = str(self.memory_model.load_memory_variables({})["memory"])
                 logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
-            if(self.memory_model.buffer):
+            if self.memory_model and self.memory_model.buffer:
                 followup_chain = make_chain(
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
