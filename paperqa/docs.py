@@ -899,7 +899,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 followup_chain = make_chain(
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
-                    memory=self.memory_model,
+                    # memory=self.memory_model,
                     system_prompt=self.prompts.system,
                 )
                 previous_question = self.memory_model.buffer[-2].content
@@ -909,7 +909,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     new_followup_question = await followup_chain.arun(
                     previous_question=previous_question,
                     question=answer.question,
-                    callbacks=callbacks,
+                    # callbacks=callbacks,
                     )
                 except Exception as e:
                     new_followup_question = str(e)
