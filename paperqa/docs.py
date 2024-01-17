@@ -653,9 +653,28 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
         
         csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
-        
+      
+        # print(f"csv sources : {csv_sources}")
         if csv_sources == 0:
-            matches = matches[:k]
+            # matches = matches[:k]
+            # for i, match in enumerate(matches[:max_sources]):
+            #     if(match.metadata["is_table"] is True) or (match.metadata['doc']['citation'].endswith('.csv')==True) :
+            #         # matches = [matches[i]]
+            #         break
+            check_table = False
+            for i, match in enumerate(matches[:max_sources]):
+                if(match.metadata["is_table"] is True) :
+                    # matches = [matches[i]]
+                    check_table = True
+                    break
+
+            if check_table == True:
+                if i == 2:
+                    matches = [matches[0],matches[i]]
+                else:
+                    matches = matches[:(i+1)]
+            else:
+                matches = matches[:max_sources]
         elif csv_sources == 3:
             matches = matches[:1]
         else:
@@ -664,13 +683,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             elif matched_sources[1].endswith('.csv') == True:
                 matches = [matches[1]]
             else:
-                matches = matches[:k]
+                matches = matches[:max_sources]
 
-        # matches = matches[:k]
-        for i, match in enumerate(matches[:max_sources]):
-            if(match.metadata["is_table"] is True):
-                matches = [matches[i]]
-                break
+        # pg_cnt = [(m.page_content, m.metadata['doc']['citation']) for m in matches]
+        # for p in pg_cnt:
+        #     print(f"\n-----------------\n{p[0]}\n{p[1]}\n-----------------\n")
+        # print(len(matches))
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
