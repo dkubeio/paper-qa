@@ -15,6 +15,7 @@ from .prompts import (
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
+    followup_system_prompt
 )
 
 StrPath = Union[str, Path]
@@ -42,15 +43,18 @@ class Text(BaseModel):
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
     relevant_vectors: Optional[List[str]] = None
-    csv_text : Optional[str] = None
+    csv_text: Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
     page_text: Optional[str] = None
     is_table: Optional[bool] = False
+    is_pdf: Optional[bool] = False
+    categories: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
     qa: PromptTemplate = qa_prompt
+    followup: Optional[PromptTemplate] = followup_system_prompt
     select: PromptTemplate = select_paper_prompt
     cite: PromptTemplate = citation_prompt
     pre: Optional[PromptTemplate] = None
@@ -77,7 +81,7 @@ class PromptCollection(BaseModel):
     @validator("select")
     def check_select(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(
-            set(select_paper_prompt.input_variables)
+                set(select_paper_prompt.input_variables)
         ):
             raise ValueError(
                 f"Select prompt can only have variables: {select_paper_prompt.input_variables}"
@@ -98,6 +102,14 @@ class PromptCollection(BaseModel):
             attrs = [a.name for a in Answer.__fields__.values()]
             if not set(v.input_variables).issubset(attrs):
                 raise ValueError(f"Post prompt must have input variables: {attrs}")
+        return v
+
+    @validator("followup")
+    def check_followup(cls, v: PromptTemplate) -> PromptTemplate:
+        if not set(v.input_variables).issubset(set(followup_system_prompt.input_variables)):
+            raise ValueError(
+                f"followup_system_prompt prompt can only have variables: {summary_prompt.input_variables}"
+            )
         return v
 
 

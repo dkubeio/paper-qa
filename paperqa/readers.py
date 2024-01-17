@@ -1,13 +1,16 @@
 import json
-import time
+import re
+import traceback
 from pathlib import Path
 from typing import List
+
 import fitz
 from html2text import html2text
-from langchain.text_splitter import TextSplitter
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import TextSplitter
+
 from .types import Doc, Text
-import re
+
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
                    overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
@@ -55,10 +58,7 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
         return pdf_texts
     except Exception as e:
         print(f"Error in parse_pdf_fitz: {e}")
-        import traceback
         traceback.print_exc()
-
-
 
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
@@ -149,23 +149,9 @@ def parse_json(
         with open(path, encoding="utf-8", errors="ignore") as f:
             file_contents = f.read()
 
-    import os
-    end_path = os.path.basename(path)
-    is_table = 'Y' in end_path
-
     json_contents = json.loads(file_contents)
-    if 'text' in json_contents:
-        text = json_contents['text']
-    else:
-        text = json_contents['page_text']
-    
-    if 'url' in json_contents:
-        doc_name = json_contents['url']
-    else:
-        doc_name = end_path
-    
-    if is_table == True:
-        page_text = json_contents['page_text']
+    text = json_contents['text']
+    doc_name = json_contents['url']
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -174,17 +160,10 @@ def parse_json(
         )
 
     raw_texts = text_splitter.split_text(text)
-
-    texts = []
-    for i, t in enumerate(raw_texts):
-        if(is_table is True):
-            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, page_text=page_text, is_table=True))
-        else:
-            texts.append(Text(text=t, name=f"{doc_name}", doc=doc, is_table=False))
-    # texts = [
-    #     Text(text=t, name=f"{doc_name}", doc=doc)
-    #     for i, t in enumerate(raw_texts)
-    # ]
+    texts = [
+        Text(text=t, name=f"{doc_name}", doc=doc)
+        for i, t in enumerate(raw_texts)
+    ]
 
     return texts
 
@@ -192,17 +171,17 @@ def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:Te
     with open(path, "r") as f:
         csv_file_data = f.read()
 
-    
+
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_chars, chunk_overlap=overlap,
             length_function=len, is_separator_regex=False,
         )
-    
+
     csv_data = csv_file_data.encode("ascii", "ignore")
     csv_data = csv_data.decode()
     page_texts = text_splitter.split_text(csv_data)
-   
+
     csv_texts : List[Text] = []
 
     for text in page_texts:
