@@ -249,7 +249,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         chunk_chars: int = 3000,
         overlap=100,
         text_splitter: TextSplitter = None,
-        use_unstructured: bool = False,
         base_dir: Path = None,
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
 
@@ -262,9 +261,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             glob.glob(os.path.join(base_dir/ "unstructured", "**/" + "*.json"), recursive=True)
         )
 
+        texts_all_pages = []
         for idx, page_doc in enumerate(page_doc_list):
-            print(f"page_doc : {page_doc}")
-
             try:
                 with open(page_doc) as f:
                     file_contents = json.loads(f.read())
@@ -279,6 +277,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                 is_table = True if file_contents.get('is_table') == 'Y' else False
                 page_text = file_contents.get('page_text')
+                page_no = file_contents.get('page_no')
                 page_text = page_text.encode("ascii", "ignore").decode()
 
                 texts = []
@@ -291,7 +290,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         "is_table": is_table, "docname": docname
                     })
 
-                page_chunks_dir = base_dir / f"chunks_{idx}"
+                texts_all_pages += texts
+                page_chunks_dir = base_dir / f"chunks_{page_no}"
                 page_chunks_dir.mkdir(parents=True, exist_ok=True)
                 chunks_file = page_chunks_dir / "text_chunks.json"
 
@@ -302,6 +302,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 print(f"Error in unstructured_process_output: {e}")
                 traceback.print_exc()
 
+        return texts_all_pages
 
     def unstructured_process_pdf(
             self,
@@ -313,7 +314,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             chunk_chars: int = 3000,
             overlap=100,
             text_splitter: TextSplitter = None,
-            use_unstructured: bool = False,
             base_dir: Path = None,
     ) -> None:
         pdf_texts: List[Text] = []
@@ -332,12 +332,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if el_pg_no not in page_dict:
                     page_dict[el.metadata.page_number] = {'page_text': '', 'tables': [], 'is_table': 'N'}
 
+                page_dict[el_pg_no]['page_no'] = el_pg_no
                 if el.category == "Table":
                     page_dict[el_pg_no]['tables'].append(el.metadata.text_as_html)
-                    page_dict[el_pg_no]['page_no'] = el_pg_no
                     page_dict[el_pg_no]['is_table'] = 'Y'
                     page_dict[el_pg_no]['page_text'] += f"{el.metadata.text_as_html}\n"
-
                 else:
                     page_dict[el_pg_no]['page_text'] += f"{el.text}\n"
 
