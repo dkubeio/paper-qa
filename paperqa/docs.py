@@ -250,6 +250,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         overlap=100,
         text_splitter: TextSplitter = None,
         base_dir: Path = None,
+        categories: Optional[List[str]] = None,
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
 
         if dockey is None:
@@ -287,7 +288,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         "chunk": text, "vector_id": str(uuid.uuid4()),
                         "tokens": text_splitter.count_tokens(text=text),
                         "page_text": page_text,
-                        "is_table": is_table, "docname": docname
+                        "is_table": is_table, "docname": docname,
+                        "categories": categories,
                     })
 
                 texts_all_pages += texts
@@ -305,16 +307,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return texts_all_pages
 
     def unstructured_process_pdf(
-            self,
-            path: Path,
-            citation: Optional[str] = None,
-            docname: Optional[str] = None,
-            disable_check: bool = False,
-            dockey: Optional[DocKey] = None,
-            chunk_chars: int = 3000,
-            overlap=100,
-            text_splitter: TextSplitter = None,
-            base_dir: Path = None,
+        self,
+        path: Path,
+        citation: Optional[str] = None,
+        docname: Optional[str] = None,
+        disable_check: bool = False,
+        dockey: Optional[DocKey] = None,
+        chunk_chars: int = 3000,
+        overlap=100,
+        text_splitter: TextSplitter = None,
+        base_dir: Path = None
     ) -> None:
         pdf_texts: List[Text] = []
         try:
