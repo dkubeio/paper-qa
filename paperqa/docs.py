@@ -259,7 +259,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # get all the files in the brase_dir
         page_doc_list = []
         page_doc_list.extend(
-            glob.glob(os.path.join(base_dir/ "unstructured", "**/" + "*.json"), recursive=True)
+            glob.glob(os.path.join(str(base_dir) + "**/" + "*.json"), recursive=True)
         )
 
         texts_all_pages = []
