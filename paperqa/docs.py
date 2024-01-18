@@ -722,11 +722,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
+            if categories:
                 where_filter={'path': ['categories'],
                               'operator': 'ContainsAll',
                               "valueText": list(categories)}
+            else:
+                where_filter=None
+            matches_with_score = self.texts_index.similarity_search_with_score(
+                answer.question, k=_k, fetch_k=5 * _k,
+                where_filter=where_filter
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
