@@ -702,7 +702,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
         trace_id: Optional[str] = None,
-        categories: Optional[List[str]] = None,
+        state_category: Optional[List[str]] = None,
+        designation_category: Optional[List[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -722,10 +723,19 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            if categories:
-                where_filter={'path': ['categories'],
-                              'operator': 'ContainsAll',
-                              "valueText": list(categories)}
+            if state_category and designation_category:
+                where_filter = {
+                    "operator": "And",
+                    "operands": [{
+                        "path": ["state_category"],
+                        "operator": "ContainsAll",
+                        "valueText": state_category
+                    }, {
+                        "path": ["designation"],
+                        "operator": "ContainsAll",
+                        "valueText": designation_category
+                    }]
+                }
             else:
                 where_filter=None
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -988,7 +998,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
-        categories: Optional[List[str]] = None,
+        state_category: Optional[List[str]] = None,
+        designation_category: Optional[List[str]] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1013,7 +1024,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 disable_answer=disable_answer,
                 reranker=reranker,
                 trace_id=trace_id,
-                categories=categories,
+                state_category=state_category,
+                designation_category=designation_category,
             )
 
         if self.prompts.pre is not None:

@@ -48,7 +48,8 @@ class Text(BaseModel):
     page_text: Optional[str] = None
     is_table: Optional[bool] = False
     is_pdf: Optional[bool] = False
-    categories: Optional[List[str]] = None
+    state_category: Optional[List[str]] = None
+    designation_category: Optional[List[str]] = None
 
 
 class PromptCollection(BaseModel):
