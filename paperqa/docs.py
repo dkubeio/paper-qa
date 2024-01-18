@@ -24,7 +24,7 @@ from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
 from sentence_transformers import CrossEncoder
-from unstructured.partition.pdf import partition_pdf
+from pathlib import Path
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -276,7 +276,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.docnames.add(docname)
                 doc = Doc(docname=docname, citation=citation, dockey=dockey)
 
-                is_table = True if file_contents.get('is_table') == 'Y' else False
+                is_table = True if file_contents.get('is_table') == 'True' else False
                 page_text = file_contents.get('page_text')
                 page_no = file_contents.get('page_no')
                 page_text = page_text.encode("ascii", "ignore").decode()
@@ -306,54 +306,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return texts_all_pages
 
-    def unstructured_process_pdf(
-        self,
-        path: Path,
-        citation: Optional[str] = None,
-        docname: Optional[str] = None,
-        disable_check: bool = False,
-        dockey: Optional[DocKey] = None,
-        chunk_chars: int = 3000,
-        overlap=100,
-        text_splitter: TextSplitter = None,
-        base_dir: Path = None
-    ) -> None:
-        pdf_texts: List[Text] = []
-        try:
-            path = Path(path)
-            if text_splitter is None:
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=chunk_chars, chunk_overlap=overlap,
-                    length_function=len, is_separator_regex=False,
-                )
-
-            elements = partition_pdf(filename=path, infer_table_structure=True)
-            page_dict = {}
-            for el in elements:
-                el_pg_no = el.metadata.page_number
-                if el_pg_no not in page_dict:
-                    page_dict[el.metadata.page_number] = {'page_text': '', 'tables': [], 'is_table': 'N'}
-
-                page_dict[el_pg_no]['page_no'] = el_pg_no
-                if el.category == "Table":
-                    page_dict[el_pg_no]['tables'].append(el.metadata.text_as_html)
-                    page_dict[el_pg_no]['is_table'] = 'Y'
-                    page_dict[el_pg_no]['page_text'] += f"{el.metadata.text_as_html}\n"
-                else:
-                    page_dict[el_pg_no]['page_text'] += f"{el.text}\n"
-
-            filename = path.name
-            for page, content in page_dict.items():
-                output_dir = base_dir / "unstructured"
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_file_path = output_dir / f"page_{page}.json"
-
-                with open(f"{output_file_path}", 'w') as file:
-                    file.write(json.dumps(content, indent=4))
-
-        except Exception as e:
-            print(f"Error in unstructured_process_pdf: {e}")
-            traceback.print_exc()
 
     def generate_chunks(
         self,
