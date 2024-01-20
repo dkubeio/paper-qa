@@ -251,7 +251,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         overlap=100,
         text_splitter: TextSplitter = None,
         base_dir: Path = None,
-        categories: str = None, 
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
@@ -333,8 +332,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "page_text": x.page_text,
-                    "is_table": x.is_table, "docname": docname,
-                    "categories": categories,
+                    "is_table": x.is_table, "docname": docname
                 })
 
         return docname, text_chunks
