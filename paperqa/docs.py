@@ -608,15 +608,24 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
             if state_category and designation_category:
+                # if the designation is broker add consumer to the designation category
+                if "Broker" in designation_category:
+                    designation_category = set(designation_category)
+                    designation_category.add("Consumer")
+
+                # add general to the state category irrespective of state.
+                state_category = set(state_category)
+                state_category.add("General")
+
                 where_filter = {
                     "operator": "And",
                     "operands": [{
                         "path": ["state_category"],
-                        "operator": "ContainsAll",
+                        "operator": "ContainsAny",
                         "valueText": list(state_category)
                     }, {
                         "path": ["designation_category"],
-                        "operator": "ContainsAll",
+                        "operator": "ContainsAny",
                         "valueText": list(designation_category)
                     }]
                 }
@@ -639,7 +648,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
             rank = 1
-            for m, score in zip(matches, scores):
+            for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}")
