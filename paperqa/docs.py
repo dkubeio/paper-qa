@@ -198,7 +198,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100, categories=categories)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -224,7 +224,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             docname = f"{author}{year}"
         docname = self._get_unique_name(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100, categories=categories)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -239,73 +239,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return docname, text_chunks
         return None, None
 
-    # def unstructured_process_output(
-    #     self,
-    #     path: Path,
-    #     citation: Optional[str] = None,
-    #     docname: Optional[str] = None,
-    #     disable_check: bool = False,
-    #     dockey: Optional[DocKey] = None,
-    #     chunk_chars: int = 3000,
-    #     overlap=100,
-    #     text_splitter: TextSplitter = None,
-    #     base_dir: Path = None,
-    #     categories: Optional[List[str]] = None,
-    # ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
-
-    #     if dockey is None:
-    #         dockey = md5sum(path)
-
-    #     # get all the files in the brase_dir
-    #     page_doc_list = []
-    #     page_doc_list.extend(
-    #         glob.glob(os.path.join(str(base_dir) + "**/" + "*.json"), recursive=True)
-    #     )
-
-    #     texts_all_pages = []
-    #     for idx, page_doc in enumerate(page_doc_list):
-    #         try:
-    #             with open(page_doc) as f:
-    #                 file_contents = json.loads(f.read())
-    #         except UnicodeDecodeError:
-    #             with open(page_doc, encoding="utf-8", errors="ignore") as f:
-    #                 file_contents = json.loads(f.read())
-
-    #         try:
-    #             # docname = self._get_unique_name(docname)
-    #             self.docnames.add(docname)
-    #             doc = Doc(docname=docname, citation=citation, dockey=dockey)
-
-    #             is_table = True if file_contents.get('is_table') == 'True' else False
-    #             page_text = file_contents.get('page_text')
-    #             page_no = file_contents.get('page_no')
-    #             page_text = page_text.encode("ascii", "ignore").decode()
-
-    #             texts = []
-    #             for text in text_splitter.split_text(page_text):
-    #                 texts.append({
-    #                     "page": path, "text_len": len(text),
-    #                     "chunk": text, "vector_id": str(uuid.uuid4()),
-    #                     "tokens": text_splitter.count_tokens(text=text),
-    #                     "page_text": page_text,
-    #                     "is_table": is_table, "docname": docname,
-    #                     "categories": categories,
-    #                 })
-
-    #             texts_all_pages += texts
-    #             page_chunks_dir = base_dir / f"chunks_{page_no}"
-    #             page_chunks_dir.mkdir(parents=True, exist_ok=True)
-    #             chunks_file = page_chunks_dir / "text_chunks.json"
-
-    #             with open(chunks_file, 'w') as f:
-    #                 json.dump(texts, f, indent=4)
-
-    #         except Exception as e:
-    #             print(f"Error in unstructured_process_output: {e}")
-    #             traceback.print_exc()
-
-    #     return texts_all_pages
-
 
     def generate_chunks(
         self,
@@ -319,6 +252,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         text_splitter: TextSplitter = None,
         use_unstructured: bool = False,
         base_dir: Path = None,
+        categories: str = None, 
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
@@ -334,7 +268,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
             texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
-                             base_dir=base_dir)
+                             base_dir=base_dir, categories=categories)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -362,10 +296,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        # if path.is_dir() and path.endswith(".pdf") :
-        #     return read_doc(path,doc,chunk_chars, overlap, text_splitter)
-        # elif:
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter, categories=categories)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -403,7 +334,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "page_text": x.page_text,
-                    "is_table": x.is_table, "docname": docname
+                    "is_table": x.is_table, "docname": docname,
+                    "categories": categories,
                 })
 
         return docname, text_chunks

@@ -8,9 +8,8 @@ import fitz
 from html2text import html2text
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TextSplitter
-
 from .types import Doc, Text
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
+from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
 
 
 
@@ -142,8 +141,9 @@ def parse_txt(
 
 def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
-    text_splitter: TextSplitter=None,
+    text_splitter: TextSplitter=None, categories: str=None
 ) -> List[Text]:
+    filename = Path(path).name
     if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
@@ -159,36 +159,19 @@ def parse_json(
     json_contents = json.loads(file_contents)
     texts = []
     if("is_pdf" in json_contents):
-        if dockey is None:
-            dockey = md5sum(path)
-        filename = Path(doc).name
-        doc = Doc(docname=filename, citation=filename, dockey=dockey)
-
-        is_table = True if file_contents.get('is_table') == 'True' else False
-        page_text = file_contents.get('page_text')
-        page_no = file_contents.get('page_no')
+        is_table = True if json_contents.get('is_table') == True else False
+        page_text = json_contents.get('page_text')
+        page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
 
-        # texts = []
-        for text in text_splitter.split_text(page_text):
-            texts.append({
-                "page": path, "text_len": len(text),
-                "chunk": text, "vector_id": str(uuid.uuid4()),
-                "tokens": text_splitter.count_tokens(text=text),
-                "page_text": page_text,
-                "is_table": is_table, "docname": docname,
-                "categories": categories,
-            })
-
+        raw_texts = text_splitter.split_text(page_text)
+        texts = [
+        Text(text=t, name=f"{filename}", doc=doc, page_text = page_text, is_table = is_table, categories = categories)
+        for i, t in enumerate(raw_texts)
+        ]
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
-
-    # if text_splitter is None:
-    #     text_splitter = RecursiveCharacterTextSplitter(
-    #         chunk_size=chunk_chars, chunk_overlap=overlap,
-    #         length_function=len, is_separator_regex=False,
-    #     )
 
         raw_texts = text_splitter.split_text(text)
         texts = [
@@ -201,7 +184,6 @@ def parse_json(
 def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[Text]:
     with open(path, "r") as f:
         csv_file_data = f.read()
-
 
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -254,74 +236,6 @@ def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int,
     return texts
 
 
-# def unstructured_process_output(
-#         self,
-#         path: Path,
-#         citation: Optional[str] = None,
-#         docname: Optional[str] = None,
-#         disable_check: bool = False,
-#         dockey: Optional[DocKey] = None,
-#         chunk_chars: int = 3000,
-#         overlap=100,
-#         text_splitter: TextSplitter = None,
-#         base_dir: Path = None,
-#         categories: Optional[List[str]] = None,
-#     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
-
-#         if dockey is None:
-#             dockey = md5sum(path)
-
-#         # get all the files in the brase_dir
-#         page_doc_list = []
-#         page_doc_list.extend(
-#             glob.glob(os.path.join(str(base_dir) + "**/" + "*.json"), recursive=True)
-#         )
-
-#         texts_all_pages = []
-#         for idx, page_doc in enumerate(page_doc_list):
-#             try:
-#                 with open(page_doc) as f:
-#                     file_contents = json.loads(f.read())
-#             except UnicodeDecodeError:
-#                 with open(page_doc, encoding="utf-8", errors="ignore") as f:
-#                     file_contents = json.loads(f.read())
-
-#             try:
-#                 # docname = self._get_unique_name(docname)
-#                 self.docnames.add(docname)
-#                 doc = Doc(docname=docname, citation=citation, dockey=dockey)
-
-#                 is_table = True if file_contents.get('is_table') == 'True' else False
-#                 page_text = file_contents.get('page_text')
-#                 page_no = file_contents.get('page_no')
-#                 page_text = page_text.encode("ascii", "ignore").decode()
-
-#                 texts = []
-#                 for text in text_splitter.split_text(page_text):
-#                     texts.append({
-#                         "page": path, "text_len": len(text),
-#                         "chunk": text, "vector_id": str(uuid.uuid4()),
-#                         "tokens": text_splitter.count_tokens(text=text),
-#                         "page_text": page_text,
-#                         "is_table": is_table, "docname": docname,
-#                         "categories": categories,
-#                     })
-
-#                 texts_all_pages += texts
-#                 page_chunks_dir = base_dir / f"chunks_{page_no}"
-#                 page_chunks_dir.mkdir(parents=True, exist_ok=True)
-#                 chunks_file = page_chunks_dir / "text_chunks.json"
-
-#                 with open(chunks_file, 'w') as f:
-#                     json.dump(texts, f, indent=4)
-
-#             except Exception as e:
-#                 print(f"Error in unstructured_process_output: {e}")
-#                 traceback.print_exc()
-
-#         return texts_all_pages
-
-
 def read_doc(
     path: Path,
     doc: Doc,
@@ -329,6 +243,7 @@ def read_doc(
     overlap: int = 100,
     force_pypdf: bool = False,
     text_splitter: TextSplitter = None,
+    categories: str = None,
 ) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
@@ -348,7 +263,7 @@ def read_doc(
         return parse_txt(path, doc, chunk_chars, overlap, html=True, text_splitter=text_splitter)
 
     elif str_path.endswith(".json") and "meta_data.json":
-        return parse_json(path, doc, chunk_chars, overlap, text_splitter)
+        return parse_json(path, doc, chunk_chars, overlap, text_splitter, categories)
     elif str_path.endswith(".csv"):
         return parse_csv(path, doc, chunk_chars, overlap, text_splitter)
     else:
