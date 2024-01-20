@@ -162,7 +162,6 @@ def parse_json(
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
-        # docname = Path(path).parent.name
         docname = json_contents.get('docname')
         raw_texts = text_splitter.split_text(page_text)
         texts = [
