@@ -163,11 +163,11 @@ def parse_json(
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
-
+        
         raw_texts = text_splitter.split_text(page_text)
         texts = [
-        Text(text=t, name=f"{filename}", doc=doc, page_text = page_text, is_table = is_table, categories = categories)
-        for i, t in enumerate(raw_texts)
+            Text(text=t, name=f"{filename}", doc=doc, page_text = page_text, is_table = is_table)
+            for i, t in enumerate(raw_texts)
         ]
     else:
         text = json_contents['text']
@@ -243,7 +243,6 @@ def read_doc(
     overlap: int = 100,
     force_pypdf: bool = False,
     text_splitter: TextSplitter = None,
-    categories: str = None,
 ) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
@@ -263,7 +262,7 @@ def read_doc(
         return parse_txt(path, doc, chunk_chars, overlap, html=True, text_splitter=text_splitter)
 
     elif str_path.endswith(".json") and "meta_data.json":
-        return parse_json(path, doc, chunk_chars, overlap, text_splitter, categories)
+        return parse_json(path, doc, chunk_chars, overlap, text_splitter)
     elif str_path.endswith(".csv"):
         return parse_csv(path, doc, chunk_chars, overlap, text_splitter)
     else:

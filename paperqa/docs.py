@@ -198,7 +198,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100, categories=categories)
+            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=100)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -224,7 +224,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             docname = f"{author}{year}"
         docname = self._get_unique_name(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100, categories=categories)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -268,7 +268,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
             texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
-                             base_dir=base_dir, categories=categories)
+                             base_dir=base_dir)
             if len(texts) == 0:
                 raise ValueError(f"Could not read document {path}. Is it empty?")
             citation = cite_chain.run(texts[0].text)
@@ -296,7 +296,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter, categories=categories)
+        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
         if (
             len(texts) == 0
