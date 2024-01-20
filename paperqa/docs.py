@@ -365,7 +365,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         chunk_chars: int = 3000,
         overlap=100,
         text_splitter: TextSplitter = None,
-        use_unstructured: bool = False,
         base_dir: Path = None,
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
@@ -729,15 +728,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "operands": [{
                         "path": ["state_category"],
                         "operator": "ContainsAll",
-                        "valueText": state_category
+                        "valueText": list(state_category)
                     }, {
-                        "path": ["designation"],
+                        "path": ["designation_category"],
                         "operator": "ContainsAll",
-                        "valueText": designation_category
+                        "valueText": list(designation_category)
                     }]
                 }
             else:
                 where_filter=None
+
+            logging.trace(f"trace_id:{trace_id} where_filter:{json.dumps(where_filter, indent=4)}")
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=where_filter
