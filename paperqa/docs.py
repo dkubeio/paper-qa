@@ -250,9 +250,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         chunk_chars: int = 3000,
         overlap=100,
         text_splitter: TextSplitter = None,
-        use_unstructured: bool = False,
         base_dir: Path = None,
-        categories: str = None, 
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
@@ -334,8 +332,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "page_text": x.page_text,
-                    "is_table": x.is_table, "docname": docname,
-                    "categories": categories,
+                    "is_table": x.is_table, "docname": docname
                 })
 
         return docname, text_chunks
@@ -589,7 +586,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
         trace_id: Optional[str] = None,
-        categories: Optional[List[str]] = None,
+        state_category: Optional[List[str]] = None,
+        designation_category: Optional[List[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -609,12 +607,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            if categories:
-                where_filter={'path': ['categories'],
-                              'operator': 'ContainsAll',
-                              "valueText": list(categories)}
+            if state_category and designation_category:
+                where_filter = {
+                    "operator": "And",
+                    "operands": [{
+                        "path": ["state_category"],
+                        "operator": "ContainsAll",
+                        "valueText": list(state_category)
+                    }, {
+                        "path": ["designation_category"],
+                        "operator": "ContainsAll",
+                        "valueText": list(designation_category)
+                    }]
+                }
             else:
                 where_filter=None
+
+            logging.trace(f"trace_id:{trace_id} where_filter:{json.dumps(where_filter, indent=4)}")
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=where_filter
@@ -875,7 +884,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
-        categories: Optional[List[str]] = None,
+        state_category: Optional[List[str]] = None,
+        designation_category: Optional[List[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
@@ -901,7 +911,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 disable_answer=disable_answer,
                 reranker=reranker,
                 trace_id=trace_id,
-                categories=categories,
+                state_category=state_category,
+                designation_category=designation_category,
             )
 
         if self.prompts.pre is not None:
