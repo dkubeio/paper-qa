@@ -143,7 +143,6 @@ def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None, categories: str=None
 ) -> List[Text]:
-    filename = Path(path).name
     if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
@@ -163,10 +162,10 @@ def parse_json(
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
-        
+        docname = Path(path).parent.name
         raw_texts = text_splitter.split_text(page_text)
         texts = [
-            Text(text=t, name=f"{filename}", doc=doc, page_text = page_text, is_table = is_table)
+            Text(text=t, name=f"{docname}", doc=doc, page_text = page_text, is_table = is_table)
             for i, t in enumerate(raw_texts)
         ]
     else:
