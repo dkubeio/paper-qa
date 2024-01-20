@@ -144,6 +144,11 @@ def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None,
 ) -> List[Text]:
+    if text_splitter is None:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_chars, chunk_overlap=overlap,
+                length_function=len, is_separator_regex=False,
+            )
     try:
         with open(path) as f:
             file_contents = f.read()
@@ -152,20 +157,44 @@ def parse_json(
             file_contents = f.read()
 
     json_contents = json.loads(file_contents)
-    text = json_contents['text']
-    doc_name = json_contents['url']
+    texts = []
+    if("is_pdf" in json_contents):
+        if dockey is None:
+            dockey = md5sum(path)
+        filename = Path(doc).name
+        doc = Doc(docname=filename, citation=filename, dockey=dockey)
 
-    if text_splitter is None:
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_chars, chunk_overlap=overlap,
-            length_function=len, is_separator_regex=False,
-        )
+        is_table = True if file_contents.get('is_table') == 'True' else False
+        page_text = file_contents.get('page_text')
+        page_no = file_contents.get('page_no')
+        page_text = page_text.encode("ascii", "ignore").decode()
 
-    raw_texts = text_splitter.split_text(text)
-    texts = [
-        Text(text=t, name=f"{doc_name}", doc=doc)
-        for i, t in enumerate(raw_texts)
-    ]
+        # texts = []
+        for text in text_splitter.split_text(page_text):
+            texts.append({
+                "page": path, "text_len": len(text),
+                "chunk": text, "vector_id": str(uuid.uuid4()),
+                "tokens": text_splitter.count_tokens(text=text),
+                "page_text": page_text,
+                "is_table": is_table, "docname": docname,
+                "categories": categories,
+            })
+
+    else:
+        text = json_contents['text']
+        doc_name = json_contents['url']
+
+    # if text_splitter is None:
+    #     text_splitter = RecursiveCharacterTextSplitter(
+    #         chunk_size=chunk_chars, chunk_overlap=overlap,
+    #         length_function=len, is_separator_regex=False,
+    #     )
+
+        raw_texts = text_splitter.split_text(text)
+        texts = [
+            Text(text=t, name=f"{doc_name}", doc=doc)
+            for i, t in enumerate(raw_texts)
+        ]
 
     return texts
 
@@ -304,14 +333,6 @@ def read_doc(
     """Parse a document into chunks."""
     str_path = str(path)
     if str_path.endswith(".pdf"):
-    #     if Path(str_path).is_dir():
-    #         return unstructured_process_output(path: Path,
-    #                                     doc: Doc,
-    #                                     chunk_chars: int = 3000,
-    #                                     overlap: int = 100,
-    #                                     force_pypdf: bool = False,
-    #                                     text_splitter: TextSplitter = None,)
-
         if force_pypdf:
             return parse_pdf(path, doc, chunk_chars, overlap)
 
@@ -326,7 +347,7 @@ def read_doc(
     elif str_path.endswith(".html") or str_path.endswith(".htm"):
         return parse_txt(path, doc, chunk_chars, overlap, html=True, text_splitter=text_splitter)
 
-    elif str_path.endswith(".json") and "meta_data.json" not in str_path and ".pdf/" not in str_path:
+    elif str_path.endswith(".json") and "meta_data.json":
         return parse_json(path, doc, chunk_chars, overlap, text_splitter)
     elif str_path.endswith(".csv"):
         return parse_csv(path, doc, chunk_chars, overlap, text_splitter)
