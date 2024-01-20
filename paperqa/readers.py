@@ -158,7 +158,7 @@ def parse_json(
 
     json_contents = json.loads(file_contents)
     texts = []
-    if("is_pdf" in json_contents):
+    if "is_pdf" in json_contents:
         is_table = True if json_contents.get('is_table') == True else False
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
