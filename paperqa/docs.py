@@ -989,6 +989,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
         categories: Optional[List[str]] = None,
+        anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1110,7 +1111,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.formatted_answer = f"Question: {answer.question}\n\n{post}\n"
             if len(bib) > 0:
                 answer.formatted_answer += f"\nReferences\n\n{bib_str}\n"
-        if self.memory_model is not None:
+        if self.memory_model is not None and not anchor_flag:
             answer.memory = self.memory_model.load_memory_variables(inputs={})["memory"]
             self.memory_model.save_context(
                 {"Question": answer.question}, {"Answer": answer.answer}
