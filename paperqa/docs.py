@@ -632,7 +632,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             else:
                 where_filter=None
 
-            logging.trace(f"trace_id:{trace_id} where_filter:{json.dumps(where_filter, indent=4)}")
+            logging.trace(f"trace_id:{trace_id} where_filter:{where_filter}")
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=where_filter
@@ -958,21 +958,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 previous_question = self.memory_model.buffer[-2].content
                 try:
-                    logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                     followup_question = await followup_chain.arun(
-                    previous_question=previous_question,
-                    question=answer.question,
-                    # callbacks=callbacks,
+                        previous_question=previous_question,
+                        question=answer.question,
+                        # callbacks=callbacks,
                     )
                 except Exception as e:
                     followup_question = str(e)
                 answer.question = followup_question
+                logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
+
             qa_chain = make_chain(
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
                 system_prompt=self.prompts.system,
             )
+
             try:
                 logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
@@ -983,6 +985,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
+
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
 
