@@ -172,14 +172,13 @@ def parse_json(
         docname = json_contents['filename']
 
         for faq_entry in json_contents['faqs']:
-            text = faq_entry.get('text', '')
+            text = faq_entry['text']
 
             raw_texts = text_splitter.split_text(text)
             texts = [
                 Text(text=t, name=f"{docname}", doc=doc, is_faq = True)
                 for i, t in enumerate(raw_texts)
             ]
-        print(f"filename: {docname}")
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
