@@ -168,6 +168,17 @@ def parse_json(
             Text(text=t, name=f"{docname}", doc=doc, page_text = page_text, is_table = is_table)
             for i, t in enumerate(raw_texts)
         ]
+    elif "is_faq" in json_contents:
+        docname = json_contents['filename']
+
+        for faq_entry in json_contents['faqs']:
+            text = faq_entry['text']
+
+            raw_texts = text_splitter.split_text(text)
+            texts = [
+                Text(text=t, name=f"{docname}", doc=doc, is_faq = True)
+                for i, t in enumerate(raw_texts)
+            ]
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
