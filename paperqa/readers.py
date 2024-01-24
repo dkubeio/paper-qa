@@ -175,7 +175,7 @@ def parse_json(
             text = faq_entry['text']
 
             raw_texts = text_splitter.split_text(text)
-            texts = [
+            texts += [
                 Text(text=t, name=f"{docname}", doc=doc, is_faq = True)
                 for i, t in enumerate(raw_texts)
             ]
