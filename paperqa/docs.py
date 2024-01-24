@@ -902,6 +902,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             raise ValueError("k should be greater than max_sources")
         if answer is None:
             answer = Answer(question=query, answer_length=length_prompt)
+            answer.trace_id = trace_id
+
         if len(answer.contexts) == 0:
             # this is heuristic - k and len(docs) are not
             # comparable - one is chunks and one is docs
