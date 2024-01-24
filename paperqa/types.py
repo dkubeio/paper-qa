@@ -148,6 +148,8 @@ class Answer(BaseModel):
     # if you want to use them.
     cost: Optional[float] = None
     token_counts: Optional[Dict[str, List[int]]] = None
+    trace_id: Optional[str] = None
+
 
     def __str__(self) -> str:
         """Return the answer as a string."""
