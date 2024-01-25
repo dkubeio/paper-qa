@@ -47,7 +47,6 @@ class Text(BaseModel):
     doc_vector_ids: Optional[List[str]] = None
     page_text: Optional[str] = None
     is_table: Optional[bool] = False
-    is_faq: Optional[bool] = False
     is_pdf: Optional[bool] = False
     state_category: Optional[List[str]] = None
     designation_category: Optional[List[str]] = None

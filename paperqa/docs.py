@@ -308,7 +308,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         update_texts = []
         for index, text in enumerate(texts):
             update_texts.append(text)
-            if not text.is_faq and text_splitter.count_tokens(text=text.text) < 100:  #we don't combine with the previous chunks for faqs 
+            if text_splitter.count_tokens(text=text.text) < 100:   
                 if index > 0:
                     update_texts[index - 1].text += " "
                     update_texts[index - 1].text += text.text
@@ -333,7 +333,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "page_text": x.page_text,
                     "is_table": x.is_table, "docname": docname,
-                    "is_faq": x.is_faq
                 })
 
         return docname, text_chunks
