@@ -46,12 +46,10 @@ class Text(BaseModel):
     csv_text: Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
     page_text: Optional[str] = None
-    page_no: Optional[int] = None
     is_table: Optional[bool] = False
     is_pdf: Optional[bool] = False
     state_category: Optional[List[str]] = None
     designation_category: Optional[List[str]] = None
-    ext_path: Optional[str] = None
 
 
 class PromptCollection(BaseModel):
