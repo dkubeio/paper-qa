@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
 import glob
 import traceback
+from urllib.parse import quote
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -331,10 +332,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "page": x.name, "text_len": len(x.text),
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
-                    "page_text": x.page_text,
+                    "page_text": x.page_text, "page_no" : x.page_no,
                     "is_table": x.is_table, "docname": docname,
+                    "ext_path": x.ext_path,
                 })
 
+        # print(f"docname: {docname}, text_chunks: {len(text_chunks)}")
         return docname, text_chunks
 
     def add_texts(
@@ -772,6 +775,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
+                        ext_path=match.metadata["ext_path"],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
@@ -994,16 +998,25 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
-        for c in answer.contexts:
+
+        bib_str = ""
+        for i, c in enumerate(answer.contexts):
             name = c.text.name
             citation = c.text.doc.citation
+
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
             #if name_in_text(name, answer_text):
             #   bib[name] = citation
-            bib[name] = citation
-        bib_str = "\n\n".join(
-            [f"{i+1}. ({k}): {c}" for i, (k, c) in enumerate(bib.items())]
-        )
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+            if c.text.ext_path:
+                url = SHARE_POINT_URL + quote(c.text.ext_path)
+                bib_str += f"\n {i+1}. {name}: {url}"
+            else:
+                if name != citation:
+                    bib_str += f"\n {i+1}. {name}: {citation}"
+                else:
+                    bib_str += f"\n {i+1}. {citation}"
+
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"

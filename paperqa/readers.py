@@ -162,10 +162,12 @@ def parse_json(
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
-        docname = json_contents.get('docname')
+        docname = Path(path).parent.name
+        ext_path = json_contents.get('ext_path')
         raw_texts = text_splitter.split_text(page_text)
         texts = [
-            Text(text=t, name=f"{docname}", doc=doc, page_text = page_text, is_table = is_table)
+            Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
+                 page_no=page_no, ext_path=ext_path)
             for i, t in enumerate(raw_texts)
         ]
     else:
@@ -262,7 +264,9 @@ def read_doc(
 
     elif str_path.endswith(".json") and "meta_data.json":
         return parse_json(path, doc, chunk_chars, overlap, text_splitter)
+
     elif str_path.endswith(".csv"):
         return parse_csv(path, doc, chunk_chars, overlap, text_splitter)
+
     else:
         return parse_code_txt(path, doc, chunk_chars, overlap, text_splitter)
