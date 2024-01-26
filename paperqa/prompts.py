@@ -51,8 +51,8 @@ qa_prompt = PromptTemplate(
     "for the question below based on the provided context. "
     "If the context provides insufficient information and the question cannot be directly answered, "
     'reply "I cannot answer". '
-    "For each part of your answer, indicate which sources most support it "
-    "via valid citation markers at the end of sentences, like (Example2012). \n"
+    # "For each part of your answer, indicate which sources most support it "
+    # "via valid citation markers at the end of sentences, like (Example2012). \n"
     "Context (with relevance scores):\n {context}\n"
     "Question: {question}\n"
     "Answer: ",
