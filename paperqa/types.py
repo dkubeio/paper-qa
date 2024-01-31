@@ -51,6 +51,7 @@ class Text(BaseModel):
     is_pdf: Optional[bool] = False
     state_category: Optional[List[str]] = None
     designation_category: Optional[List[str]] = None
+    topic: Optional[List[str]] = None
     ext_path: Optional[str] = None
 
 
