@@ -1010,7 +1010,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
             if c.text.ext_path:
                 url = SHARE_POINT_URL + quote(c.text.ext_path)
-                bib_str += f"\n {i+1}. {name}: {url}"
+                bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
                     bib_str += f"\n {i+1}. {name}: {citation}"
