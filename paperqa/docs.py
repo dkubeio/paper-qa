@@ -713,7 +713,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
-        from langchain.vectorstores import Weaviate
         import weaviate
         class_name = self.texts_index._index_name
         WEAVIATE_URL = os.getenv("WEAVIATE_URI", None)
