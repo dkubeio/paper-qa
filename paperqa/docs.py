@@ -716,6 +716,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         def get_next_context(source):
             doc_vector_ids = source.metadata['doc_vector_ids']
             parent_chunk = ''
+            vid = ''
             if len(doc_vector_ids) > 3:
                 sid = source.metadata['_additional']['id']
                 sid_index = doc_vector_ids.index(sid)
@@ -724,13 +725,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     vid = doc_vector_ids[sid_index + 3]
                 elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
                     vid = doc_vector_ids[sid_index + 2]
+                
+                if vid != '':
+                    data_object = self.texts_index._client.data_object.get_by_id(
+                        vid,
+                        class_name=self.texts_index._index_name,
+                    )
 
-                data_object = self.texts_index._client.data_object.get_by_id(
-                    vid,
-                    class_name=self.texts_index._index_name,
-                )
-
-                parent_chunk = data_object['properties']['parent_chunk']
+                    parent_chunk = data_object['properties']['parent_chunk']
 
             # print(f"\n-------\nData object = \n\n{data_object['properties']['parent_chunk']}\n----------\n")
             return parent_chunk
