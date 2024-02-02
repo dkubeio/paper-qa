@@ -542,6 +542,59 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topic: Tuple[str]):
+        category_filter = None
+
+        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topic:{topic}")
+        print(f"state_category:{state_category} designation_category:{designation_category} topic:{topic}", flush=True)
+
+        if state_category and designation_category:
+            # if the designation is broker add consumer to the designation category
+            if "Broker" in designation_category:
+                designation_category = set(designation_category)
+                designation_category.add("Consumer")
+
+            # add general to the state category irrespective of state.
+            state_category = set(state_category)
+            state_category.add("General")
+
+            if topic:
+                category_filter = {
+                    "operator": "And",
+                    "operands": [{
+                        "path": ["state_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(state_category)
+                    }, {
+                        "path": ["designation_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(designation_category)
+                    }, {
+                        "path": ["topic"],
+                        "operator": "ContainsAny",
+                        "valueText": list(topic)
+                    }]
+                }
+            else:
+                category_filter = {
+                    "operator": "And",
+                    "operands": [{
+                        "path": ["state_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(state_category)
+                    }, {
+                        "path": ["designation_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(designation_category)
+                    }]
+                }
+
+        logging.trace(f"weaviate category filter:{category_filter}")
+        print(f"weaviate category filter:{category_filter}", flush=True)
+
+        return category_filter
+
+
     def get_evidence(
         self,
         answer: Answer,
@@ -591,6 +644,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         trace_id: Optional[str] = None,
         state_category: Optional[List[str]] = None,
         designation_category: Optional[List[str]] = None,
+        topic: Optional[List[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -610,35 +664,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            if state_category and designation_category:
-                # if the designation is broker add consumer to the designation category
-                if "Broker" in designation_category:
-                    designation_category = set(designation_category)
-                    designation_category.add("Consumer")
 
-                # add general to the state category irrespective of state.
-                state_category = set(state_category)
-                state_category.add("General")
+            category_filter = self.category_filter_get(state_category, designation_category, topic)
+            logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
-                where_filter = {
-                    "operator": "And",
-                    "operands": [{
-                        "path": ["state_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(state_category)
-                    }, {
-                        "path": ["designation_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(designation_category)
-                    }]
-                }
-            else:
-                where_filter=None
-
-            logging.trace(f"trace_id:{trace_id} where_filter:{where_filter}")
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
-                where_filter=where_filter
+                where_filter=category_filter
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
@@ -899,6 +931,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         trace_id: Optional[str] = None,
         state_category: Optional[List[str]] = None,
         designation_category: Optional[List[str]] = None,
+        topic: Optional[List[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
@@ -928,6 +961,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 trace_id=trace_id,
                 state_category=state_category,
                 designation_category=designation_category,
+                topic=topic,
             )
 
         if self.prompts.pre is not None:
