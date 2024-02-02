@@ -713,16 +713,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
-        import weaviate
-        class_name = self.texts_index._index_name
-        WEAVIATE_URL = os.getenv("WEAVIATE_URI", None)
-        DKUBEX_API_KEY = os.getenv("DKUBEX_API_KEY", "deadbeef")
-
-        weaviate_client = weaviate.Client(
-            url=WEAVIATE_URL,
-            additional_headers={"Authorization": DKUBEX_API_KEY},
-        )
-
         def get_next_context(source):
             doc_vector_ids = source.metadata['doc_vector_ids']
             parent_chunk = ''
@@ -735,9 +725,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
                     vid = doc_vector_ids[sid_index + 2]
 
-                data_object = weaviate_client.data_object.get_by_id(
+                data_object = self.texts_index._client.data_object.get_by_id(
                     vid,
-                    class_name=class_name,
+                    class_name=self.texts_index._index_name,
                 )
 
                 parent_chunk = data_object['properties']['parent_chunk']
