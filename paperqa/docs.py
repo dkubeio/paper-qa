@@ -681,37 +681,36 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
-
-        csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
+        matches = matches[:max_sources]
         
-        if csv_sources == 0:
-            check_table = False
-            for i, match in enumerate(matches[:max_sources]):
-                if(match.metadata["is_table"] is True) :
-                    check_table = True
-                    break
-
-            if check_table == True:
-                if i == 2:
-                    matches = [matches[0],matches[i]]
-                else:
-                    matches = matches[:(i+1)]
-            else:
-                matches = matches[:max_sources]
-        elif csv_sources == 3:
-            matches = matches[:1]
-        else:
-            if matched_sources[0].endswith('.csv') == True:
-                matches = matches[:1]
-            elif matched_sources[1].endswith('.csv') == True:
-                matches = [matches[1]]
-            else:
-                matches = [matches[2]]
-
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
+
+        def get_next_context(source):
+            doc_vector_ids = source.metadata['doc_vector_ids']
+            parent_chunk = ''
+            vid = ''
+            if len(doc_vector_ids) > 3:
+                sid = source.metadata['_additional']['id']
+                sid_index = doc_vector_ids.index(sid)
+
+                if not sid_index:
+                    vid = doc_vector_ids[sid_index + 3]
+                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+                    vid = doc_vector_ids[sid_index + 2]
+                
+                if vid != '':
+                    data_object = self.texts_index._client.data_object.get_by_id(
+                        vid,
+                        class_name=self.texts_index._index_name,
+                    )
+
+                    parent_chunk = data_object['properties']['parent_chunk']
+
+            return parent_chunk
+
+        next_contexts = [get_next_context(m) for m in matches]
 
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -767,11 +766,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if disable_answer:
             contexts = [
                 Context(
-                    context=match.page_content,
+                    context=match.page_content + next_contexts[idx],
                     score=10,
                     weaviate_score=scores[idx],
                     text=Text(
-                        text=match.page_content,
+                        text=match.page_content + next_contexts[idx],
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
