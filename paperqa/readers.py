@@ -158,18 +158,20 @@ def parse_json(
     json_contents = json.loads(file_contents)
     texts = []
     if "is_pdf" in json_contents:
-        is_table = True if json_contents.get('is_table') == True else False
+        is_table = json_contents.get('is_table')
+        is_toc = json_contents.get('is_toc')
         page_text = json_contents.get('page_text')
         page_no = json_contents.get('page_no')
         page_text = page_text.encode("ascii", "ignore").decode()
         docname = Path(path).parent.name
         ext_path = json_contents.get('ext_path')
         raw_texts = text_splitter.split_text(page_text)
-        texts = [
-            Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
-                 page_no=page_no, ext_path=ext_path)
-            for i, t in enumerate(raw_texts)
-        ]
+        if not is_toc:
+            texts = [
+                Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
+                     page_no=page_no, ext_path=ext_path)
+                for i, t in enumerate(raw_texts)
+            ]
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
