@@ -166,21 +166,21 @@ def parse_json(
         docname = Path(path).parent.name
         ext_path = json_contents.get('ext_path')
         raw_texts = text_splitter.split_text(page_text)
-        texts = [
-            Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
-                 page_no=page_no, ext_path=ext_path)
-            for i, t in enumerate(raw_texts)
-        ]
-    else:
         if not is_toc:
-            text = json_contents['text']
-            doc_name = json_contents['url']
-
-            raw_texts = text_splitter.split_text(text)
             texts = [
-                Text(text=t, name=f"{doc_name}", doc=doc)
+                Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
+                     page_no=page_no, ext_path=ext_path)
                 for i, t in enumerate(raw_texts)
             ]
+    else:
+        text = json_contents['text']
+        doc_name = json_contents['url']
+
+        raw_texts = text_splitter.split_text(text)
+        texts = [
+            Text(text=t, name=f"{doc_name}", doc=doc)
+            for i, t in enumerate(raw_texts)
+        ]
 
     return texts
 
