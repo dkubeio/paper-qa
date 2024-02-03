@@ -681,34 +681,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        # matched_sources = [ m.metadata['doc']['citation'] for m in matches[:max_sources] ]
-
-        # csv_sources = len([ m for m in matched_sources if m.endswith('.csv') == True])
-        # 
-        # if csv_sources == 0:
-        #     check_table = False
-        #     for i, match in enumerate(matches[:max_sources]):
-        #         if(match.metadata["is_table"] is True) :
-        #             check_table = True
-        #             break
-
-        #     if check_table == True:
-        #         if i == 2:
-        #             matches = [matches[0],matches[i]]
-        #         else:
-        #             matches = matches[:(i+1)]
-        #     else:
-        #         matches = matches[:max_sources]
-        # elif csv_sources == 3:
-        #     matches = matches[:1]
-        # else:
-        #     if matched_sources[0].endswith('.csv') == True:
-        #         matches = matches[:1]
-        #     elif matched_sources[1].endswith('.csv') == True:
-        #         matches = [matches[1]]
-        #     else:
-        #         matches = [matches[2]]
         matches = matches[:max_sources]
+        
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -721,7 +695,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 sid = source.metadata['_additional']['id']
                 sid_index = doc_vector_ids.index(sid)
 
-                if sid_index == 0:
+                if not sid_index:
                     vid = doc_vector_ids[sid_index + 3]
                 elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
                     vid = doc_vector_ids[sid_index + 2]
@@ -734,7 +708,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                     parent_chunk = data_object['properties']['parent_chunk']
 
-            # print(f"\n-------\nData object = \n\n{data_object['properties']['parent_chunk']}\n----------\n")
             return parent_chunk
 
         next_contexts = [get_next_context(m) for m in matches]
@@ -807,9 +780,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 for idx, match in enumerate(matches)
             ]
-
-            # cnts = [ c.context for c in contexts ]
-            # print(f"\n----------\nContexts = \n\n{cnts}\n--------\n")
 
         else:
             if reranker:
