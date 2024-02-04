@@ -337,7 +337,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "ext_path": x.ext_path,
                 })
 
-        # print(f"docname: {docname}, text_chunks: {len(text_chunks)}")
         return docname, text_chunks
 
     def add_texts(
@@ -542,11 +541,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topic: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topic:{topic}")
-        print(f"state_category:{state_category} designation_category:{designation_category} topic:{topic}", flush=True)
+        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
 
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -558,23 +556,53 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             state_category = set(state_category)
             state_category.add("General")
 
-            if topic:
-                category_filter = {
-                    "operator": "And",
-                    "operands": [{
-                        "path": ["state_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(state_category)
-                    }, {
-                        "path": ["designation_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(designation_category)
-                    }, {
-                        "path": ["topic"],
-                        "operator": "ContainsAny",
-                        "valueText": list(topic)
-                    }]
-                }
+            if topics:
+
+                if topics[0] == "All":
+                    topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
+
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [{
+                            "path": ["state_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(state_category)
+                        }, {
+                            "path": ["designation_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(designation_category)
+                        }, {
+                            "path": ["topic"],
+                            "operator": "ContainsAny",
+                            "valueText": list(topics)
+                        }]
+                    }
+                else:
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [
+                            {
+                                "path": ["state_category"],
+                                "operator": "ContainsAny",
+                                "valueText": list(state_category)
+                            },
+                            {
+                                "operator": "Or",
+                                "operands": [
+                                    {
+                                        "path": ["designation_category"],
+                                        "operator": "ContainsAny",
+                                        "valueText": list(designation_category)
+                                    },
+                                    {
+                                        "path": ["topic"],
+                                        "operator": "ContainsAny",
+                                        "valueText": list(topics)
+                                    }
+                                ]
+                            }
+                        ]
+                    }
             else:
                 category_filter = {
                     "operator": "And",
@@ -590,7 +618,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 }
 
         logging.trace(f"weaviate category filter:{category_filter}")
-        print(f"weaviate category filter:{category_filter}", flush=True)
 
         return category_filter
 
@@ -642,9 +669,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None",
         trace_id: Optional[str] = None,
-        state_category: Optional[List[str]] = None,
-        designation_category: Optional[List[str]] = None,
-        topic: Optional[List[str]] = None,
+        state_category: Optional[Tuple[str]] = None,
+        designation_category: Optional[Tuple[str]] = None,
+        topic: Optional[Tuple[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -667,6 +694,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
+            (f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
@@ -928,9 +956,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         disable_answer: bool = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
-        state_category: Optional[List[str]] = None,
-        designation_category: Optional[List[str]] = None,
-        topic: Optional[List[str]] = None,
+        state_category: Optional[Tuple[str]] = None,
+        designation_category: Optional[Tuple[str]] = None,
+        topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
