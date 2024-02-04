@@ -337,7 +337,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "ext_path": x.ext_path,
                 })
 
-        # print(f"docname: {docname}, text_chunks: {len(text_chunks)}")
         return docname, text_chunks
 
     def add_texts(
@@ -546,7 +545,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = None
 
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
-        print(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}", flush=True)
 
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -620,7 +618,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 }
 
         logging.trace(f"weaviate category filter:{category_filter}")
-        print(f"weaviate category filter:{category_filter}", flush=True)
 
         return category_filter
 
