@@ -694,7 +694,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-            (f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
@@ -824,6 +823,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return c
 
         if disable_answer:
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
             contexts = [
                 Context(
                     context=match.page_content + next_contexts[idx],
@@ -831,7 +831,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     weaviate_score=scores[idx],
                     text=Text(
                         text=match.page_content + next_contexts[idx],
-                        name=match.metadata["name"],
+                        name=SHARE_POINT_URL + quote(match.metadata.get('ext_path')) if match.metadata.get(
+                            'ext_path') else match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
