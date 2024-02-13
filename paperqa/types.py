@@ -54,7 +54,6 @@ class Text(BaseModel):
     topic: Optional[List[str]] = None
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
-    state: Optional[str] = None
 
 
 class PromptCollection(BaseModel):
