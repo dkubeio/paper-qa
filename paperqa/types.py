@@ -53,6 +53,7 @@ class Text(BaseModel):
     designation_category: Optional[List[str]] = None
     topic: Optional[List[str]] = None
     ext_path: Optional[str] = None
+    doc_source: Optional[str] = None
 
 
 class PromptCollection(BaseModel):
