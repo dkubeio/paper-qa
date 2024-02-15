@@ -870,7 +870,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for idx, match in enumerate(matches)
             ]
 
-            for c in contexts:
+            for i,c in enumerate(contexts):
                 print(f"\n-------------\nContext {i}:\n{c.context}\n----------------\n")
 
         else:
