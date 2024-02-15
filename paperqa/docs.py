@@ -694,7 +694,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-            (f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
@@ -747,6 +746,31 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
+
+        def get_next_page_context(source):
+            print("Getting next page chunk")
+
+            first_chunk = ''
+            source_name = ' '.join(source.metadata['name'].split(' ')[:-2])
+            next_page_no = str(int(source.metadata['name'].split(' ')[-1]) + 1)
+            next_page_name = source_name + ' pages ' + next_page_no
+
+            object_filter = {
+                    'path' : ['name'],
+                    'operator' : 'Equal',
+                    'valueText' : next_page_name
+                    }
+        
+            class_name = self.texts_index._index_name
+            data = self.texts_index._client.query.get(class_name, ['doc','name', 'vector_id', 'parent_chunk', 'doc_vector_ids']).with_where(object_filter).do()
+            if data['data']['Get'][class_name] != []:
+                doc_vector_ids = data['data']['Get'][class_name][0]['doc_vector_ids']
+                first_id = doc_vector_ids[0]
+                first_chunk = [ cdata['parent_chunk'] for cdata in data['data']['Get'][class_name] if cdata['vector_id'] == first_id ][0]
+
+            return first_chunk
+            
+
         def get_next_context(source):
             doc_vector_ids = source.metadata['doc_vector_ids']
             parent_chunk = ''
@@ -757,9 +781,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                 if not sid_index:
                     vid = doc_vector_ids[sid_index + 3]
-                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+                elif sid_index > 0 and sid_index <= (len(doc_vector_ids) - 3):
                     vid = doc_vector_ids[sid_index + 2]
-                
+                elif '.pdf' in source.metadata['name']:
+                    parent_chunk = get_next_page_context(source)
+
                 if vid != '':
                     data_object = self.texts_index._client.data_object.get_by_id(
                         vid,
@@ -767,6 +793,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     )
 
                     parent_chunk = data_object['properties']['parent_chunk']
+            else:
+                if '.pdf' in source.metadata['name']:
+                    parent_chunk = get_next_page_context(source)
 
             return parent_chunk
 
@@ -840,6 +869,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 for idx, match in enumerate(matches)
             ]
+
+            for i,c in enumerate(contexts):
+                print(f"\n-------------\nContext {i}:\n{c.context}\n----------------\n")
 
         else:
             if reranker:
