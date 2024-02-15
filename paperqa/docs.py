@@ -748,6 +748,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         def get_next_page_context(source):
+            print("Getting next page chunk")
+
             first_chunk = ''
             source_name = ' '.join(source.metadata['name'].split(' ')[:-2])
             next_page_no = str(int(source.metadata['name'].split(' ')[-1]) + 1)
@@ -867,6 +869,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 for idx, match in enumerate(matches)
             ]
+
+            for c in contexts:
+                print(f"\n-------------\nContext {i}:\n{c.context}\n----------------\n")
 
         else:
             if reranker:
