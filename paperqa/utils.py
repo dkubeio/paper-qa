@@ -2,6 +2,7 @@ import asyncio
 import math
 import re
 import string
+import os
 from typing import BinaryIO, List
 
 import pypdf
@@ -71,8 +72,11 @@ def count_pdf_pages(file_path: StrPath) -> int:
 def md5sum(file_path: StrPath) -> str:
     import hashlib
 
-    with open(file_path, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+    if not os.path.isdir(file_path):
+        with open(file_path, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()
+    else:
+        return hashlib.md5(str(file_path).encode('UTF-8')).hexdigest()
 
 
 async def gather_with_concurrency(n: int, *coros: List) -> List:
