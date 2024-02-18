@@ -296,6 +296,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
+        print(f"\n-----\nLength of texts : {len(texts)}\n----------\n")
         # loose check to see if document was loaded
         if (
             len(texts) == 0
@@ -306,14 +307,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 f"This does not look like a text document: {path}. Path disable_check to ignore this error."
             )
 
+        i = 0
         update_texts = []
         for index, text in enumerate(texts):
             update_texts.append(text)
             if text_splitter.count_tokens(text=text.text) < 100:   
                 if index > 0:
-                    update_texts[index - 1].text += " "
-                    update_texts[index - 1].text += text.text
-                    update_texts.pop(index)
+                    update_texts[index - i -  1].text += " "
+                    update_texts[index - i - 1].text += text.text
+                    update_texts.pop(index - i)
+                    i = i + 1
 
         if update_texts and Path(path).suffix == ".json":
             docname = update_texts[0].name
@@ -336,6 +339,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "is_table": x.is_table, "docname": docname,
                     "ext_path": x.ext_path,
                 })
+
+        # print("Printing text chunks")
+        # for i, t in enumerate(text_chunks):
+        #     print(f"\n-----------\n{t}\n\n{texts[i]}\n\n{update_texts[i]}\n----------\n")
 
         return docname, text_chunks
 
