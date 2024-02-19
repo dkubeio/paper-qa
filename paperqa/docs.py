@@ -976,6 +976,29 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 if len(keys) > 0:
                     answer.dockey_filter = keys
+                
+                if self.memory_model:
+                    memory_str = str(self.memory_model.load_memory_variables({})["memory"])
+                    logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
+
+                if self.memory_model and self.memory_model.buffer:
+                    followup_chain = make_chain(
+                        self.prompts.followup,
+                        cast(BaseLanguageModel, self.llm),
+                        # memory=self.memory_model,
+                        system_prompt=self.prompts.system,
+                    )
+                    previous_question = self.memory_model.buffer[-2].content
+                    try:
+                        followup_question = await followup_chain.arun(
+                            previous_question=previous_question,
+                            question=answer.question,
+                            # callbacks=callbacks,
+                        )
+                    except Exception as e:
+                        followup_question = str(e)
+                    answer.question = followup_question
+                    logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
 
             answer = await self.aget_evidence(
                 answer,
@@ -1012,28 +1035,28 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             start_time = datetime.now()
             callbacks = get_callbacks("answer")
-            if self.memory_model:
-                memory_str = str(self.memory_model.load_memory_variables({})["memory"])
-                logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
+            # if self.memory_model:
+            #     memory_str = str(self.memory_model.load_memory_variables({})["memory"])
+            #     logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
-            if self.memory_model and self.memory_model.buffer:
-                followup_chain = make_chain(
-                    self.prompts.followup,
-                    cast(BaseLanguageModel, self.llm),
-                    # memory=self.memory_model,
-                    system_prompt=self.prompts.system,
-                )
-                previous_question = self.memory_model.buffer[-2].content
-                try:
-                    followup_question = await followup_chain.arun(
-                        previous_question=previous_question,
-                        question=answer.question,
-                        # callbacks=callbacks,
-                    )
-                except Exception as e:
-                    followup_question = str(e)
-                answer.question = followup_question
-                logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
+            # if self.memory_model and self.memory_model.buffer:
+            #     followup_chain = make_chain(
+            #         self.prompts.followup,
+            #         cast(BaseLanguageModel, self.llm),
+            #         # memory=self.memory_model,
+            #         system_prompt=self.prompts.system,
+            #     )
+            #     previous_question = self.memory_model.buffer[-2].content
+            #     try:
+            #         followup_question = await followup_chain.arun(
+            #             previous_question=previous_question,
+            #             question=answer.question,
+            #             # callbacks=callbacks,
+            #         )
+            #     except Exception as e:
+            #         followup_question = str(e)
+            #     answer.question = followup_question
+            #     logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
 
             qa_chain = make_chain(
                 self.prompts.qa,
