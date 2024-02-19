@@ -296,7 +296,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
-        print(f"\n-----\nLength of texts : {len(texts)}\n----------\n")
         # loose check to see if document was loaded
         if (
             len(texts) == 0

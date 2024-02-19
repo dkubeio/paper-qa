@@ -211,7 +211,7 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
         first_page = json.load(open(pdf_jsons[0]))
     except UnicodeDecodeError:
         first_page = json.load(open(pdf_jsons[0], encoding='utf-8', errors='ignore'))
-    if text_splitter.count_tokens(text=first_page) <= 30:
+    if text_splitter.count_tokens(text=first_page['page_text']) <= 30:
         pdf_jsons = pdf_jsons[1:]
         k = 1
 
@@ -277,11 +277,13 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
                     else:
                         prev_page_chunk.append(Text_object)
 
-    if prev_page_chunk != []:
+    if prev_page_chunk != [] and raw_texts != []:
         raw_texts[-1].text += f" {prev_page_chunk[-1].text}"
         if int(raw_texts[-1].name.split(' ')[-1]) != int(prev_page_chunk[-1].name.split(' ')[-1]):
             ind = prev_page_chunk[-1].name.split(' ').index('pages')
             raw_texts[-1].name += f", {' '.join(prev_page_chunk[-1].name.split(' ')[ind+1:])}"
+    elif raw_texts == []:
+        raw_texts.append(prev_page_chunk[0])
             
     return raw_texts
 
