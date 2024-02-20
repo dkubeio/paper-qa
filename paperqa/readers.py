@@ -178,12 +178,19 @@ def parse_json(
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
+        ext_path = json_contents.get('ext_path')
 
         raw_texts = text_splitter.split_text(text)
-        texts = [
-            Text(text=t, name=f"{doc_name}", doc=doc)
-            for i, t in enumerate(raw_texts)
-        ]
+        if ext_path != None:
+            texts = [
+                Text(text=t, name=f"{doc_name}", doc=doc, ext_path=ext_path)
+                for i, t in enumerate(raw_texts)
+            ]
+        else:
+            texts = [
+                Text(text=t, name=f"{doc_name}", doc=doc)
+                for i, t in enumerate(raw_texts)
+            ]
 
     return texts
 
@@ -253,8 +260,6 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
                     text_splitter.tokens_per_chunk = original_tokens_per_chunk
                     prev_Text_object.text = prev_Text_object.text + f" {text_to_add}"
                     prev_Text_object.name = prev_Text_object.name + f', {page_no}'
-                    prev_Text_object.doc.docname += f", {page_no}"
-                    prev_Text_object.doc.citation += f", {page_no}"
                     prev_Text_object.page_no =  str(prev_Text_object.page_no) + f", {page_no}"
                     page_text = page_text[len(text_to_add):]
                     
