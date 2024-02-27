@@ -694,11 +694,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-            (f"trace_id:{trace_id} category_filter:{category_filter}")
 
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
-                where_filter=category_filter
+            # matches_with_score = self.texts_index.similarity_search_with_score(
+            matches_with_score = self.texts_index.similarity_search(
+                answer.question, k=_k,  # fetch_k=5 * _k,
+                where_filter=category_filter,
+                additional=["id", "distance"]
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
@@ -706,9 +707,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-            matches = [match_with_score[0] for match_with_score in matches_with_score]
+            scores = sorted([m.metadata['_additional']['distance'] for m in matches_with_score])
+            matches = sorted(matches_with_score, key=lambda doc: doc.metadata['_additional']['distance'])
 
             rank = 1
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
