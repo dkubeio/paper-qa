@@ -587,7 +587,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                                 "valueText": list(state_category)
                             },
                             {
-                                "operator": "Or",
+                                "operator": "And",
                                 "operands": [
                                     {
                                         "path": ["designation_category"],
