@@ -557,52 +557,25 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             state_category.add("General")
 
             if topics:
-
-                if topics[0] == "All":
+                if topics[0] == "All" or "Broker" in designation_category:
                     topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
 
-                    category_filter = {
-                        "operator": "And",
-                        "operands": [{
-                            "path": ["state_category"],
-                            "operator": "ContainsAny",
-                            "valueText": list(state_category)
-                        }, {
-                            "path": ["designation_category"],
-                            "operator": "ContainsAny",
-                            "valueText": list(designation_category)
-                        }, {
-                            "path": ["topic"],
-                            "operator": "ContainsAny",
-                            "valueText": list(topics)
-                        }]
-                    }
-                else:
-                    category_filter = {
-                        "operator": "And",
-                        "operands": [
-                            {
-                                "path": ["state_category"],
-                                "operator": "ContainsAny",
-                                "valueText": list(state_category)
-                            },
-                            {
-                                "operator": "Or",
-                                "operands": [
-                                    {
-                                        "path": ["designation_category"],
-                                        "operator": "ContainsAny",
-                                        "valueText": list(designation_category)
-                                    },
-                                    {
-                                        "path": ["topic"],
-                                        "operator": "ContainsAny",
-                                        "valueText": list(topics)
-                                    }
-                                ]
-                            }
-                        ]
-                    }
+                category_filter = {
+                    "operator": "And",
+                    "operands": [{
+                        "path": ["state_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(state_category)
+                    }, {
+                        "path": ["designation_category"],
+                        "operator": "ContainsAny",
+                        "valueText": list(designation_category)
+                    }, {
+                        "path": ["topic"],
+                        "operator": "ContainsAny",
+                        "valueText": list(topics)
+                    }]
+                }
             else:
                 category_filter = {
                     "operator": "And",
