@@ -1007,7 +1007,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         bib = dict()
-        if len(answer.context) < 10 and not self.memory:
+        if len(answer.context) < 15 and not self.memory:
             answer_text = (
                 "I cannot answer this question due to insufficient information."
             )
