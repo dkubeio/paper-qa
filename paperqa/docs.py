@@ -630,6 +630,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
+    def filter_unique_matches(self, matches, scores):
+        new_matches = []
+        new_scores = []
+        unique_set = set()
+
+        for m, score in zip(matches, scores):
+            # the relevant vectors are already in order, just sorting them
+            relevant_vectors = tuple(sorted(m.metadata["relevant_vectors"]))
+            if relevant_vectors not in unique_set:
+                new_matches.append(m)
+                new_scores.append(score)
+                unique_set.add(relevant_vectors)
+
+        return new_matches, new_scores
+
     async def aget_evidence(
         self,
         answer: Answer,
@@ -667,7 +682,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-            (f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
@@ -682,6 +696,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
+
+            matches, scores = self.filter_unique_matches(matches, scores)
 
             rank = 1
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
