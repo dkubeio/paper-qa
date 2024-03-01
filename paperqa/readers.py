@@ -220,7 +220,6 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
     except UnicodeDecodeError:
         first_page = json.load(open(os.path.join(str(path), 'page_1.json'), encoding='utf-8', errors='ignore'))
     if text_splitter.count_tokens(text=first_page['page_text']) <= 30:
-        pdf_jsons = pdf_jsons[1:]
         k = 1
 
     no_of_files = len(pdf_jsons)
