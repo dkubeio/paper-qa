@@ -700,11 +700,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches, scores = self.filter_unique_matches(matches, scores)
 
             rank = 1
+            score_threshold = 0.7
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
-                rank += 1
+                if score >= score_threshold:
+                    vector_id = m.metadata["_additional"]["id"]
+                    logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                                  f" doc:{json.loads(m.metadata['doc'])['docname']}")
+                    rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -721,8 +723,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # check if it is deleted
         matches = [
             m
-            for m in matches
-            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
+            for i,m in enumerate(matches)
+            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys and scores[i] >= score_threshold
         ]
 
         # check if it is already in answer
@@ -994,7 +996,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         bib = dict()
-        if len(answer.context) < 10 and not self.memory:
+        if len(answer.context) < 15 and not self.memory:
             answer_text = (
                 "I cannot answer this question due to insufficient information."
             )
