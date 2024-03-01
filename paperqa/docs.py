@@ -711,7 +711,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
             rank = 1
-            score_threshold = 0.7
+            score_threshold = 0.6
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 if score >= score_threshold:
                     vector_id = m.metadata["_additional"]["id"]
