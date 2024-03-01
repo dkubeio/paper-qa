@@ -207,6 +207,7 @@ def get_text_to_add(prev_text, page_text, prev_text_tokens, text_splitter):
 def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[Text]:
     if text_splitter is None:
         text_splitter = RecursiveCharacterTextSplitter(
+
             chunk_size=chunk_chars, chunk_overlap=overlap,
             length_function=len, is_separator_regex=False,
         )
@@ -215,9 +216,9 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
 
     k = 0
     try:
-        first_page = json.load(open(pdf_jsons[0]))
+        first_page = json.load(open(os.path.join(str(path), 'page_1.json'))
     except UnicodeDecodeError:
-        first_page = json.load(open(pdf_jsons[0], encoding='utf-8', errors='ignore'))
+        first_page = json.load(open(os.path.join(str(path), 'page_1.json'), encoding='utf-8', errors='ignore'))
     if text_splitter.count_tokens(text=first_page['page_text']) <= 30:
         pdf_jsons = pdf_jsons[1:]
         k = 1
