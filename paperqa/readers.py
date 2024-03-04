@@ -216,7 +216,7 @@ def parse_pdf_jsons(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_split
 
     k = 0
     try:
-        first_page = json.load(open(os.path.join(str(path), 'page_1.json'))
+        first_page = json.load(open(os.path.join(str(path), 'page_1.json')))
     except UnicodeDecodeError:
         first_page = json.load(open(os.path.join(str(path), 'page_1.json'), encoding='utf-8', errors='ignore'))
     if text_splitter.count_tokens(text=first_page['page_text']) <= 30:
