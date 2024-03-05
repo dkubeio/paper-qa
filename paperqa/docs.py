@@ -710,6 +710,32 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
+        # check if the matches are knowledge vs work flow
+        workflow_matches = []
+        workflow_docs = [
+            "CHP Tickets.pdf", "Ticketing_Templates_and_Guides.pdf",
+            "Create a Ticket NV - Google Docs.pdf", "ROP Tickets.pdf", "SSHIX - Ticket Templates 2023.pdf",
+            "SSHIX - Triage Tickets.pdf", "Ticket Template Reinstatment - NV.pdf",
+            "SSHIX - Ticket Templates 2023.pdf", "Account Tasks/Appeal Ticket guide.pdf",
+            "Custom Template Ticket Creation - PA.pdf", "Enrollment Tickets - PA.pdf",
+            "Ticket Templates - PA.pdf", "VA-Critical Ticket Guidelines.pdf", "Call_Center_User_Guide_v5.1.pdf",
+            "Exchange_Administrator_User_Guide_v7.1.pdf", "Exchange_Administrator_User_Guide_v7.1.pdf",
+        ]
+
+        for m in matches:
+            print(f"m in m")
+            docname = m.metadata["doc"]
+            print("docname: ", docname)
+            if "pages " in docname.docname:
+                parts = docname.docname.split()
+                if len(parts) >= 3:
+                    docname = ' '.join(parts[:-2])
+                    print(f"docname: {docname}")
+
+            if docname in workflow_docs:
+                workflow_matches.append(m)
+                print(f"workflow docname: {docname}")
+
         # ok now filter
         #if answer.dockey_filter is not None:
         #    matches = [
