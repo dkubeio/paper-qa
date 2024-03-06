@@ -714,7 +714,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             matches_with_score_list_copy = matches_with_score_list.copy()
             question_category = self.question_category_get(answer.question)
-            print(f"question_category: {question_category}")
             if question_category == "State":
                 for idx, match in enumerate(matches_with_score_list_copy):
                     # print(f"match: {match[0].metadata}")
