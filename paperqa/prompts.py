@@ -58,6 +58,35 @@ qa_prompt = PromptTemplate(
     "Answer: ",
 )
 
+# workflowVSknowledge_prompt = PromptTemplate(
+#     input_variables=["knowledge_context", "workflow_context", "answer_length", "question"],
+#     template="Write an answer in {answer_length} "
+#     "for the question below based on the provided contexts. "
+#     "One is Knowledge Context and second one is Workflow Context. "
+#     "Generate two answers for the each context. "
+#     "If the context provides insufficient information and the question cannot be directly answered, "
+#     'reply "I cannot answer". '
+#     "For each part of your answer, indicate which sources most support it "
+#     "via valid citation markers at the end of sentences, like (Example2012). \n"
+#     "Knowledge Context (with relevance scores):\n {knowledge_context}\n"
+#     "Workflow Context (with relevance scores):\n {workflow_context}\n"
+#     "Question: {question}\n"
+#     "Answer: [Knowdelge Answer] \n\n [Workflow Answer] ",
+# )
+
+workflowVSknowledge_prompt = PromptTemplate(
+    input_variables=["knowledge_context", "workflow_context", "question"],
+    template="For the question below based on the provided contexts. "
+    "One is Knowledge Context and another is the Workflow Context. "
+    "Generate two answrs separately for each context. "
+    "If the either of the context provides insufficient information and the question cannot be directly answered, "
+    'reply "I cannot answer". '
+    "Knowledge Context (with relevance scores):\n {knowledge_context}\n"
+    "Workflow Context (with relevance scores):\n {workflow_context}\n"
+    "Question: {question}\n"
+    "Answer: \n [Knowdelge Answer] \n\n [Workflow Answer] ",
+)
+
 select_paper_prompt = PromptTemplate(
     input_variables=["question", "papers"],
     template="Select papers that may help answer the question below. "

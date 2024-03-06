@@ -15,7 +15,8 @@ from .prompts import (
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
-    followup_system_prompt
+    followup_system_prompt,
+    workflowVSknowledge_prompt,
 )
 
 StrPath = Union[str, Path]
@@ -65,6 +66,7 @@ class PromptCollection(BaseModel):
     post: Optional[PromptTemplate] = None
     system: str = default_system_prompt
     skip_summary: bool = False
+    workflowVSknowledge: Optional[PromptTemplate] = workflowVSknowledge_prompt
 
     @validator("summary")
     def check_summary(cls, v: PromptTemplate) -> PromptTemplate:
@@ -116,6 +118,14 @@ class PromptCollection(BaseModel):
             )
         return v
 
+    @validator("workflowVSknowledge")
+    def check_workflowVSknowledge(cls, v: PromptTemplate) -> PromptTemplate:
+        if not set(v.input_variables).issubset(set(workflowVSknowledge_prompt.input_variables)):
+            raise ValueError(
+                f"followup_system_prompt prompt can only have variables: {workflowVSknowledge_prompt.input_variables}"
+            )
+        return v
+
 
 class Context(BaseModel):
     """A class to hold the context of a question."""
@@ -151,6 +161,8 @@ class Answer(BaseModel):
     cost: Optional[float] = None
     token_counts: Optional[Dict[str, List[int]]] = None
     trace_id: Optional[str] = None
+    knowledge_context: str = ""
+    workflow_context: str = ""
 
 
     def __str__(self) -> str:

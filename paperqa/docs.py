@@ -660,6 +660,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
+        workflow_flag: Optional[bool] = False
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -711,6 +712,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
         # check if the matches are knowledge vs work flow
+        # knowledge_matches = []
         workflow_matches = []
         workflow_docs = [
             "CHP Tickets.pdf", "Ticketing_Templates_and_Guides.pdf",
@@ -722,19 +724,51 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             "Exchange_Administrator_User_Guide_v7.1.pdf", "Exchange_Administrator_User_Guide_v7.1.pdf",
         ]
 
-        for m in matches:
-            print(f"m in m")
-            docname = m.metadata["doc"]
-            print("docname: ", docname)
-            if "pages " in docname.docname:
-                parts = docname.docname.split()
-                if len(parts) >= 3:
-                    docname = ' '.join(parts[:-2])
-                    print(f"docname: {docname}")
+        # check if it is deleted
+        matches = [
+            m
+            for m in matches
+            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
+        ]
+        
+        # check if it is already in answer
+        cur_names = [c.text.name for c in answer.contexts]
+        matches = [m for m in matches if m.metadata["name"] not in cur_names]
+        
+        len_knowledge_matches = 0
+        len_workflow_matches = 0
+        wflag = False
+        nflag = False
+        if workflow_flag:
+            for m in matches:
+                # print(f"m in m")
+                docname = m.metadata["doc"]
+                # print("docname: ", docname)
+                if "pages " in docname.get('docname'):
+                    parts = docname.get('docname').split()
+                    if len(parts) >= 3:
+                        docname = ' '.join(parts[:-2])
+                        # print(f"docname: {docname}")
 
-            if docname in workflow_docs:
-                workflow_matches.append(m)
-                print(f"workflow docname: {docname}")
+                if docname in workflow_docs:
+                    if len_workflow_matches == max_sources:
+                        wflag = True
+                    else:
+                        workflow_matches.append(m)
+                        # print(f"workflow docname: {docname}")
+                        len_workflow_matches += 1
+                # else:
+                #     if len_knowledge_matches == max_sources:
+                #         nflag = True
+                #     else:
+                #         knowledge_matches.append(m)
+                #         # print(f"knowledge docname: {docname}")
+                #         len_knowledge_matches += 1
+                # 
+                # if (wflag and nflag):
+                if wflag:
+                    # print(f"\n---\n{len(workflow_matches)}\n----\n")
+                    break
 
         # ok now filter
         #if answer.dockey_filter is not None:
@@ -744,19 +778,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
         #    ]
 
-        # check if it is deleted
-        matches = [
-            m
-            for m in matches
-            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
-        ]
-
-        # check if it is already in answer
-        cur_names = [c.text.name for c in answer.contexts]
-        matches = [m for m in matches if m.metadata["name"] not in cur_names]
-
         # now fnally cut down
-        matches = matches[:max_sources]
+        if workflow_flag:
+            # matches = knowledge_matches + workflow_matches
+            matches = workflow_matches
+        else:
+            matches = matches[:max_sources]
         
         # create score for each match
         for i, match in enumerate(matches):
@@ -766,26 +793,30 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc_vector_ids = source.metadata['doc_vector_ids']
             parent_chunk = ''
             vid = ''
-            if len(doc_vector_ids) > 3:
-                sid = source.metadata['_additional']['id']
-                sid_index = doc_vector_ids.index(sid)
+            try :
+                if len(doc_vector_ids) > 3:
+                    sid = source.metadata['_additional']['id']
+                    sid_index = doc_vector_ids.index(sid)
 
-                if not sid_index:
-                    vid = doc_vector_ids[sid_index + 3]
-                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
-                    vid = doc_vector_ids[sid_index + 2]
-                
-                if vid != '':
-                    data_object = self.texts_index._client.data_object.get_by_id(
-                        vid,
-                        class_name=self.texts_index._index_name,
-                    )
+                    if not sid_index:
+                        vid = doc_vector_ids[sid_index + 3]
+                    elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+                        vid = doc_vector_ids[sid_index + 2]
+                    
+                    if vid != '':
+                        data_object = self.texts_index._client.data_object.get_by_id(
+                            vid,
+                            class_name=self.texts_index._index_name,
+                        )
 
-                    parent_chunk = data_object['properties']['parent_chunk']
+                        parent_chunk = data_object['properties']['parent_chunk']
+            except:
+                print("Error : getting in next chunk")
 
             return parent_chunk
 
         next_contexts = [get_next_context(m) for m in matches]
+        # next_contexts = ['' for m in matches]
 
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -904,7 +935,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
-        answer.contexts = answer.contexts[:max_sources]
+        # answer.contexts = answer.contexts[:max_sources]
         context_str = "\n\n".join(
             [
                 f"{c.text.name}: {c.context}"
@@ -913,9 +944,27 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             ]
         )
 
+        # knowledge_str = "\n\n".join(
+        #     [
+        #         f"{c.text.name}: {c.context}"
+        #         + (f"\n\n Based on {c.text.doc.citation}" if detailed_citations else "")
+        #         for c in answer.contexts[:max_sources]
+        #     ]
+        # )
+
+        # workflow_str = "\n\n".join(
+        #     [
+        #         f"{c.text.name}: {c.context}"
+        #         + (f"\n\n Based on {c.text.doc.citation}" if detailed_citations else "")
+        #         for c in answer.contexts[max_sources:]
+        #     ]
+        # )
+
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
+        # answer.knowledge_context = knowledge_str
+        # answer.workflow_context = workflow_str
         return answer
 
     def query(
@@ -976,6 +1025,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
+        workflow_flag = False
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
         if answer is None:
@@ -991,7 +1041,33 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 if len(keys) > 0:
                     answer.dockey_filter = keys
+       
+            def process_qwords(qword, qwords):
+                flow_cat = False
+                if qword in qwords:
+                    idx = qwords.index(qword)
+                    if (idx != (len(qwords) - 1)):
+                        if qwords[idx + 1] == 'to' or qwords[idx + 1] == 'do' or qwords[idx + 1] == 'does' or qwords[idx + 1] == 'can':
+                            flow_cat = True
 
+                return flow_cat
+
+            def get_flow_cat(question):
+                flow_cat = False
+                if question != None:
+                    question = question.lower()
+                    qwords = question.split(' ')
+                    if 'how' in qwords:
+                        flow_cat = process_qwords('how', qwords)
+                    # elif 'what' in qwords:
+                    #     flow_cat = process_qwords('what', qwords)
+                    else:
+                        flow_cat = False
+
+                return flow_cat
+
+            workflow_flag = get_flow_cat(query)
+            # print(f"\n-----------\n{workflow_flag}\n--------------\n")
             answer = await self.aget_evidence(
                 answer,
                 k=k,
@@ -1004,6 +1080,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 state_category=state_category,
                 designation_category=designation_category,
                 topic=topic,
+                workflow_flag=workflow_flag,
             )
 
         if self.prompts.pre is not None:
@@ -1056,7 +1133,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory=self.memory_model,
                 system_prompt=self.prompts.system,
             )
-
+            
             try:
                 logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
@@ -1067,6 +1144,61 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
+           
+            # print("[Knowledge Answer]\n")
+            # if len(answer.knowledge_context) < 10 and not self.memory:
+            #     knowledge_answer = (
+            #         "I cannot answer this question due to insufficient information."
+            #     )
+            # else:
+            #     try:
+            #         logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+            #         knowledge_answer = await qa_chain.arun(
+            #             context=answer.knowledge_context,
+            #             answer_length=answer.answer_length,
+            #             question=answer.question,
+            #             callbacks=callbacks,
+            #         )
+            #     except Exception as e:
+            #         knowledge_answer = str(e)
+
+            # print("\n\n[Workflow Answer]\n")
+            # if len(answer.workflow_context) < 10 and not self.memory:
+            #     workflow_answer = (
+            #         "I cannot answer this question due to insufficient information."
+            #     )
+            # else:
+            #     # print(f"\n-----------\n{answer.workflow_context}\n---------\n")
+            #     try:
+            #         logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+            #         workflow_answer = await qa_chain.arun(
+            #             context=answer.workflow_context,
+            #             answer_length=answer.answer_length,
+            #             question=answer.question,
+            #             callbacks=callbacks,
+            #         )
+            #     except Exception as e:
+            #         workflow_answer = str(e)
+
+            # answer_text = f"[Knowledge Answer]\n\n{knowledge_answer}\n\n[Workflow answer]\n{workflow_answer}"
+
+            # qa_chain = make_chain(
+            #     self.prompts.workflowVSknowledge,
+            #     cast(BaseLanguageModel, self.llm),
+            #     memory=self.memory_model,
+            #     system_prompt=self.prompts.system,
+            # )
+
+            # try:
+            #     logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+            #     answer_text = await qa_chain.arun(
+            #         knowledge_context = answer.knowledge_context,
+            #         workflow_context = answer.workflow_context,
+            #         question=answer.question,
+            #         callbacks=callbacks,
+            #     )
+            # except Exception as e:
+            #     answer_text = str(e)
 
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
@@ -1118,5 +1250,5 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 {"Question": answer.question}, {"Answer": answer.answer}
             )
             self.memory_model.clear(self.memory_model.k)
-
+        
         return answer
