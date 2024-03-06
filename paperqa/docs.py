@@ -326,6 +326,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "csv_text": x.csv_text, "docname": docname,
+                    "doc_source": x.doc_source,
+                    "state_category": x.state_category,
                 })
             else:
                 text_chunks.append({
@@ -335,6 +337,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "page_text": x.page_text, "page_no" : x.page_no,
                     "is_table": x.is_table, "docname": docname,
                     "ext_path": x.ext_path,
+                    "doc_source": x.doc_source,
+                    "state_category": x.state_category,
                 })
 
         return docname, text_chunks
@@ -703,7 +707,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
+                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
                 rank += 1
 
         for m in matches:
