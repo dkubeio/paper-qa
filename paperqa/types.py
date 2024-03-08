@@ -52,6 +52,7 @@ class Text(BaseModel):
     state_category: Optional[List[str]] = None
     designation_category: Optional[List[str]] = None
     topic: Optional[List[str]] = None
+    user_category: Optional[List[str]] = None
     ext_path: Optional[str] = None
 
 

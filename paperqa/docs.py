@@ -541,10 +541,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], user_category: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
+        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics} user_category:{user_category}")
 
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -556,39 +556,85 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             state_category = set(state_category)
             state_category.add("General")
 
-            if topics:
-                if topics[0] == "All" or "Broker" in designation_category:
-                    topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
+            if user_category:
+                if user_category[0] == "L2":
+                    user_category = ("L0", "L1","L2")
 
-                category_filter = {
-                    "operator": "And",
-                    "operands": [{
-                        "path": ["state_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(state_category)
-                    }, {
-                        "path": ["designation_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(designation_category)
-                    }, {
-                        "path": ["topic"],
-                        "operator": "ContainsAny",
-                        "valueText": list(topics)
-                    }]
-                }
+                if topics:
+                    if topics[0] == "All" or "Broker" in designation_category:
+                        topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
+
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [{
+                            "path": ["state_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(state_category)
+                        }, {
+                            "path": ["designation_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(designation_category)
+                        }, {
+                            "path": ["topic"],
+                            "operator": "ContainsAny",
+                            "valueText": list(topics)
+                        },{
+                            "path": ["user_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(user_category)
+                        }]
+                    }
+                else:
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [{
+                            "path": ["state_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(state_category)
+                        }, {
+                            "path": ["designation_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(designation_category)
+                        },{
+                            "path": ["user_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(user_category)
+                        }]
+                    }
             else:
-                category_filter = {
-                    "operator": "And",
-                    "operands": [{
-                        "path": ["state_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(state_category)
-                    }, {
-                        "path": ["designation_category"],
-                        "operator": "ContainsAny",
-                        "valueText": list(designation_category)
-                    }]
-                }
+                if topics:
+                    if topics[0] == "All" or "Broker" in designation_category:
+                        topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
+
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [{
+                            "path": ["state_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(state_category)
+                        }, {
+                            "path": ["designation_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(designation_category)
+                        }, {
+                            "path": ["topic"],
+                            "operator": "ContainsAny",
+                            "valueText": list(topics)
+                        }]
+                    }
+                else:
+                    category_filter = {
+                        "operator": "And",
+                        "operands": [{
+                            "path": ["state_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(state_category)
+                        }, {
+                            "path": ["designation_category"],
+                            "operator": "ContainsAny",
+                            "valueText": list(designation_category)
+                        }]
+                    }
 
         logging.trace(f"weaviate category filter:{category_filter}")
 
@@ -659,6 +705,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         trace_id: Optional[str] = None,
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
+        user_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
     ) -> Answer:
         if disable_vector_search:
@@ -680,7 +727,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
 
-            category_filter = self.category_filter_get(state_category, designation_category, topic)
+            category_filter = self.category_filter_get(state_category, designation_category, user_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -948,6 +995,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
+        user_category: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
@@ -977,6 +1025,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 trace_id=trace_id,
                 state_category=state_category,
                 designation_category=designation_category,
+                user_category=user_category,
                 topic=topic,
             )
 
