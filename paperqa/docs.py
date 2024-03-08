@@ -712,7 +712,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
         # check if the matches are knowledge vs work flow
-        # knowledge_matches = []
+        knowledge_matches = []
         workflow_matches = []
         workflow_docs = [
             "CHP Tickets.pdf", "Ticketing_Templates_and_Guides.pdf",
@@ -721,7 +721,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             "SSHIX - Ticket Templates 2023.pdf", "Account Tasks/Appeal Ticket guide.pdf",
             "Custom Template Ticket Creation - PA.pdf", "Enrollment Tickets - PA.pdf",
             "Ticket Templates - PA.pdf", "VA-Critical Ticket Guidelines.pdf", "Call_Center_User_Guide_v5.1.pdf",
-            "Exchange_Administrator_User_Guide_v7.1.pdf", "Exchange_Administrator_User_Guide_v7.1.pdf",
+            "Exchange_Administrator_User_Guide_v7.1.pdf",
         ]
 
         # check if it is deleted
@@ -731,10 +731,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
         ]
         
-        # check if it is already in answer
-        cur_names = [c.text.name for c in answer.contexts]
-        matches = [m for m in matches if m.metadata["name"] not in cur_names]
-        
+                
         len_knowledge_matches = 0
         len_workflow_matches = 0
         wflag = False
@@ -755,17 +752,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         wflag = True
                     else:
                         workflow_matches.append(m)
-                        # print(f"workflow docname: {docname}")
+                        print(f"workflow docname: {docname}")
                         len_workflow_matches += 1
-                # else:
-                #     if len_knowledge_matches == max_sources:
-                #         nflag = True
-                #     else:
-                #         knowledge_matches.append(m)
-                #         # print(f"knowledge docname: {docname}")
-                #         len_knowledge_matches += 1
-                # 
-                # if (wflag and nflag):
+            # else:
+            #     if len_knowledge_matches == max_sources:
+            #         nflag = True
+            #     else:
+            #         knowledge_matches.append(m)
+            #         print(f"knowledge docname: {docname}")
+            #         len_knowledge_matches += 1
+            
+            # if (wflag and nflag):
                 if wflag:
                     # print(f"\n---\n{len(workflow_matches)}\n----\n")
                     break
@@ -778,9 +775,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
         #    ]
 
+        # check if it is already in answer
+        cur_names = [c.text.name for c in answer.contexts]
+        matches = [m for m in matches if m.metadata["name"] not in cur_names]
+
         # now fnally cut down
         if workflow_flag:
-            # matches = knowledge_matches + workflow_matches
+        # matches = knowledge_matches + workflow_matches
             matches = workflow_matches
         else:
             matches = matches[:max_sources]
@@ -963,8 +964,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
+
+        # valid_names = [c.text.name for c in answer.contexts[:max_sources]]
+        # context_str += "\n\nValid keys: " + ", ".join(valid_names)
         # answer.knowledge_context = knowledge_str
+
+        # valid_names = [c.text.name for c in answer.contexts[max_sources:]]
+        # context_str += "\n\nValid keys: " + ", ".join(valid_names)
         # answer.workflow_context = workflow_str
+        
         return answer
 
     def query(
