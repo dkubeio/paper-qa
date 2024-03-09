@@ -544,6 +544,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], user_category: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
+        all_topics = ["General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA"]
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics} user_category:{user_category}")
 
         if state_category and designation_category:
@@ -557,12 +558,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             state_category.add("General")
 
             if user_category:
-                if user_category[0] == "L2":
-                    user_category = ("L0", "L1","L2")
+                user_category = set(user_category)
+                user_category.add('General')
 
                 if topics:
-                    if topics[0] == "All" or "Broker" in designation_category:
-                        topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
+                    if 'All' in topics or "Broker" in designation_category:
+                        topics = set()
+                        for topic in all_topics:
+                            topics.add(topic)
 
                     category_filter = {
                         "operator": "And",
@@ -740,12 +743,25 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
+            matches_with_score_list = []
+            for match_with_score in matches_with_score:
+                matches_with_score_list.append([match_with_score[0], match_with_score[1]])
+
+            matches_with_score_copy = []
+            for i, match_with_score in enumerate(matches_with_score_list):
+                user_cat = user_category[0]
+                if 'L1' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                    match_with_score[1] = match_with_score[1] * 1.2
+                elif 'L2' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                    match_with_score[1] = match_with_score[1] * 0.9
+                
+                matches_with_score_copy.append(tuple(match_with_score))
+
+            matches_with_score = matches_with_score_copy
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
-
+            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches, scores = self.filter_unique_matches(matches, scores)
-
             rank = 1
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 vector_id = m.metadata["_additional"]["id"]
