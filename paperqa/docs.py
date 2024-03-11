@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any, Literal
 import glob
 import traceback
 from urllib.parse import quote
@@ -326,6 +326,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "chunk": x.text, "vector_id": str(uuid.uuid4()),
                     "tokens": text_splitter.count_tokens(text=x.text),
                     "csv_text": x.csv_text, "docname": docname,
+                    "doc_source": x.doc_source,
+                    "state_category": x.state_category,
                 })
             else:
                 text_chunks.append({
@@ -335,6 +337,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     "page_text": x.page_text, "page_no" : x.page_no,
                     "is_table": x.is_table, "docname": docname,
                     "ext_path": x.ext_path,
+                    "doc_source": x.doc_source,
+                    "state_category": x.state_category,
                 })
 
         return docname, text_chunks
@@ -544,7 +548,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], user_category: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
-        all_topics = ["General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA"]
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics} user_category:{user_category}")
 
         if state_category and designation_category:
@@ -562,10 +565,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 user_category.add('General')
 
                 if topics:
-                    if 'All' in topics or "Broker" in designation_category:
-                        topics = set()
-                        for topic in all_topics:
-                            topics.add(topic)
+                    if topics[0] == "All" or "Broker" in designation_category:
+                        topics = ("General", "Eligibility", "Enrollments", "Applications", "Account Tasks", "ACA")
 
                     category_filter = {
                         "operator": "And",
@@ -694,6 +695,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
+    # this function returns if the question is a general or a state question
+    def question_category_get(self, question) -> Literal["General", "State"]:
+        general_key_words = ["ticket", "irs", "taxes", "1095", "citizenship", "verify"]
+        if any(word in question.lower() for word in general_key_words):
+            return "General"
+        else:
+            return "State"
+
+
     async def aget_evidence(
         self,
         answer: Answer,
@@ -741,6 +751,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
+            matches_with_score_list = []
+            # matches_with_score is a list of tuples (doc, score), make it a list of [docs, score]
+            for idx, match in enumerate(matches_with_score):
+                matches_with_score_list.append([match[0], match[1]])
+
+            matches_with_score_list_copy = matches_with_score_list.copy()
+            question_category = self.question_category_get(answer.question)
+            if question_category == "State":
+                for idx, match in enumerate(matches_with_score_list_copy):
+                    # print(f"match: {match[0].metadata}")
+                    if (match[0].metadata["state_category"][0] in state_category and
+                            match[0].metadata["doc_source"][0] == "GI"):
+                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
+
+            # if the question is going to be the state we multiply with 1.2
+            matches_with_score = matches_with_score_list
+            
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
             matches_with_score_list = []
@@ -758,6 +785,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 matches_with_score_copy.append(tuple(match_with_score))
 
             matches_with_score = matches_with_score_copy
+            
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
@@ -766,7 +794,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}")
+                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
                 rank += 1
 
         for m in matches:
