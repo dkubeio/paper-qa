@@ -829,6 +829,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
+                        doc_source = match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
@@ -1064,7 +1065,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             #   bib[name] = citation
             SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
             if c.text.ext_path:
-                if c.text.doc_source[0] == 'external':
+                if c.text.doc_source == 'external':
                     url = c.text.ext_path
                 else:
                     url = SHARE_POINT_URL + quote(c.text.ext_path)
