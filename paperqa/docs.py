@@ -716,10 +716,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             question_category = self.question_category_get(answer.question)
             if question_category == "State":
                 for idx, match in enumerate(matches_with_score_list_copy):
-                    print(f"match: {match[0].metadata}")
                     if (match[0].metadata["state_category"][0] in state_category and
                             match[0].metadata["doc_source"][0] == "GI"):
                         matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
+                    elif (match[0].metadata["state_category"][0] in state_category and
+                          match[0].metadata["doc_source"][0] == "External"):
+                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.1
 
             # if the question is going to be the state we multiply with 1.2
             matches_with_score = matches_with_score_list
