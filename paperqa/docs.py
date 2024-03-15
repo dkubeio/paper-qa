@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any, Literal
 import glob
 import traceback
 from urllib.parse import quote
@@ -649,6 +649,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
+    # this function returns if the question is a general or a state question
+    def question_category_get(self, question) -> Literal["General", "State"]:
+        general_key_words = ["ticket", "irs", "taxes", "1095", "citizenship", "verify"]
+        if any(word in question.lower() for word in general_key_words):
+            return "General"
+        else:
+            return "State"
+
+
     async def aget_evidence(
         self,
         answer: Answer,
@@ -696,11 +705,31 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
             # matches_with_score is a list of tuples (doc, score)
-            # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
+            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+
+            matches_with_score_list = []
+            # matches_with_score is a list of tuples (doc, score), make it a list of [docs, score]
+            for idx, match in enumerate(matches_with_score):
+                matches_with_score_list.append([match[0], match[1]])
+
+            matches_with_score_list_copy = matches_with_score_list.copy()
+            question_category = self.question_category_get(answer.question)
+            if question_category == "State":
+                for idx, match in enumerate(matches_with_score_list_copy):
+                    if (match[0].metadata["state_category"][0] in state_category and
+                            match[0].metadata["doc_source"][0] == "GI"):
+                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
+                    elif (match[0].metadata["state_category"][0] in state_category and
+                          match[0].metadata["doc_source"][0] == "External"):
+                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.1
+
+            # if the question is going to be the state we multiply with 1.2
+            matches_with_score = matches_with_score_list
+
+            # sort the matches based on the updated score
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
-
+            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches, scores = self.filter_unique_matches(matches, scores)
 
             rank = 1
