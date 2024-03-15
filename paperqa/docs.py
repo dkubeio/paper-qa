@@ -697,8 +697,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+            scores = sorted([m[1] for m in matches_with_score], reverse=False)
+            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=False)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
 
             matches, scores = self.filter_unique_matches(matches, scores)
