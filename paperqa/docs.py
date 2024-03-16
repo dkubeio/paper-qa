@@ -806,17 +806,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             next_contexts.append(next_context)
             total_token_count = total_token_count + int(matches[i].metadata['token_count']) + token_count
             i = i + 1
-
-        matches = matches[:i]
+        max_sources = i
+        matches = matches[:max_sources]
         rank = 1
-        # for m, score in zip(matches[:max_sources], scores[:max_sources]):
-        for m, score in zip(matches, scores[:i]):
+        for m, score in zip(matches[:max_sources], scores[:max_sources]):
             vector_id = m.metadata["_additional"]["id"]
             logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                           f" doc:{m.metadata['doc']['docname']}"
                           f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
             rank += 1
-        
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -942,7 +940,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 for c in answer.contexts
             ]
         )
-
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
