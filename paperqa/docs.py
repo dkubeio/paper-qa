@@ -810,10 +810,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = matches[:i]
         rank = 1
         # for m, score in zip(matches[:max_sources], scores[:max_sources]):
-        for m, score in zip(matches[:i], scores[:i]):
+        for m, score in zip(matches, scores[:i]):
             vector_id = m.metadata["_additional"]["id"]
             logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                          f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                          f" doc:{m.metadata['doc']['docname']}"
                           f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
             rank += 1
         
