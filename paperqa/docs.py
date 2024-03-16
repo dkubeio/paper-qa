@@ -719,8 +719,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if question_category == "State":
                 for idx, match in enumerate(matches_with_score_list_copy):
                     # print(f"match: {match[0].metadata}")
-                    if (match[0].metadata["state_category"][0] in state_category and
-                            match[0].metadata["doc_source"][0] == "GI"):
+                    # if (match[0].metadata["state_category"][0] in state_category and
+                    #         match[0].metadata["doc_source"][0] == "GI"):
+                    if (match[0].metadata["state_category"][0] in state_category):
                         matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
 
             # if the question is going to be the state we multiply with 1.2
@@ -733,13 +734,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches, scores = self.filter_unique_matches(matches, scores)
 
-            rank = 1
-            for m, score in zip(matches[:max_sources], scores[:max_sources]):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
-                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-                rank += 1
+            # rank = 1
+            # for m, score in zip(matches[:max_sources], scores[:max_sources]):
+            #     vector_id = m.metadata["_additional"]["id"]
+            #     logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+            #                   f" doc:{json.loads(m.metadata['doc'])['docname']}"
+            #                   f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+            #     rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -807,6 +808,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             i = i + 1
 
         matches = matches[:i]
+        rank = 1
+        # for m, score in zip(matches[:max_sources], scores[:max_sources]):
+        for m, score in zip(matches[:i], scores[:i]):
+            vector_id = m.metadata["_additional"]["id"]
+            logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                          f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                          f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+            rank += 1
         
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
