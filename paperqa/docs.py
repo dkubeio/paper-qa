@@ -712,20 +712,24 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for idx, match in enumerate(matches_with_score):
                 matches_with_score_list.append([match[0], match[1]])
 
+            matches_with_score = matches_with_score_list[:2]
+            matches_with_score_list = matches_with_score_list[2:]
             matches_with_score_list_copy = matches_with_score_list.copy()
             question_category = self.question_category_get(answer.question)
             if question_category == "State":
                 for idx, match in enumerate(matches_with_score_list_copy):
-                    print(f"match: {match[0].metadata}")
-                    if (match[0].metadata["state_category"][0] in state_category and
-                            match[0].metadata["doc_source"][0] == "GI"):
+                    # print(f"match: {match[0].metadata}")
+                    # if (match[0].metadata["state_category"][0] in state_category and
+                    #         match[0].metadata["doc_source"][0] == "GI"):
+                    if (match[0].metadata["state_category"][0] in state_category):
                         matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
 
             # if the question is going to be the state we multiply with 1.2
-            matches_with_score = matches_with_score_list
+            matches_with_score_list = sorted(matches_with_score_list, key=lambda tup: tup[1], reverse=True)
+            matches_with_score += matches_with_score_list
 
             # sort the matches based on the updated score
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+            # matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches, scores = self.filter_unique_matches(matches, scores)
