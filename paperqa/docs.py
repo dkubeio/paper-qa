@@ -719,8 +719,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if question_category == "State":
                 for idx, match in enumerate(matches_with_score_list_copy):
                     # print(f"match: {match[0].metadata}")
-                    if (match[0].metadata["state_category"][0] in state_category and
-                            match[0].metadata["doc_source"][0] == "GI"):
+                    # if (match[0].metadata["state_category"][0] in state_category and
+                    #         match[0].metadata["doc_source"][0] == "GI"):
+                    if (match[0].metadata["state_category"][0] in state_category):
                         matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
 
             # if the question is going to be the state we multiply with 1.2
@@ -765,7 +766,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        matches = matches[:(max_sources + 1)]
+        matches = matches[:max_sources]
         
         # create score for each match
         for i, match in enumerate(matches):
