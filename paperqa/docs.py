@@ -41,6 +41,8 @@ from .utils import (
     md5sum,
 )
 
+total_token_count = 0
+token_count_list = []
 
 class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     """A collection of documents to be used for answering questions."""
@@ -708,6 +710,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # matches_with_score is a list of tuples (doc, score)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             if rerank_flag:
+                max_sources = 2
                 matches_with_score_list = []
                 # matches_with_score is a list of tuples (doc, score), make it a list of [docs, score]
                 for idx, match in enumerate(matches_with_score):
@@ -728,23 +731,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 matches_with_score_list = sorted(matches_with_score_list, key=lambda tup: tup[1], reverse=True)
                 matches_with_score += matches_with_score_list
 
+            i = 0
+            j = 1
+            while(j < len(matches_with_score)):
+                if matches_with_score[j][1] == matches_with_score[i][1] and matches_with_score[j][0].metadata['doc_source'] == 'GI':
+                    a = matches_with_score[j]
+                    matches_with_score[j] = matches_with_score[i]
+                    matches_with_score[i] = a
+                
+                j = j + 1
+                i = i + 1
+
             # sort the matches based on the updated score
             # matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches, scores = self.filter_unique_matches(matches, scores)
 
-            if not rerank_flag:
-                rank = 1
-            else:
-                rank = 3
-
-            for m, score in zip(matches[:max_sources], scores[:max_sources]):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
-                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-                rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -771,7 +774,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now fnally cut down
         matches = matches[:max_sources]
-        
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -780,6 +782,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc_vector_ids = source.metadata['doc_vector_ids']
             parent_chunk = ''
             vid = ''
+            token_count = 0
             if len(doc_vector_ids) > 3:
                 sid = source.metadata['_additional']['id']
                 sid_index = doc_vector_ids.index(sid)
@@ -796,11 +799,40 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     )
 
                     parent_chunk = data_object['properties']['parent_chunk']
+                    token_count = int(data_object['properties']['token_count'])
+            return parent_chunk, token_count
 
-            return parent_chunk
+        # next_contexts = [get_next_context(m) for m in matches]
+        global total_token_count
+        global total_count_list
+        max_count = 7000
+        next_contexts = []
+        for m in matches:
+            next_context, token_count = get_next_context(m)
+            if (total_token_count + int(m.metadata['token_count']) + token_count) < max_count:
+                total_token_count = total_token_count + int(m.metadata['token_count']) + token_count
+                next_contexts.append(next_context)
+                token_count_list.append(int(m.metadata['token_count']) + token_count)
+            else:
+                if answer.contexts:
+                    answer.contexts.pop(-1)
+                    total_token_count = total_token_count - token_count_list.pop(2)
+                total_token_count = total_token_count + int(m.metadata['token_count']) + token_count
+                next_contexts.append(next_context)
+                token_count_list.append(int(m.metadata['token_count']) + token_count)
+        
+        if not rerank_flag:
+            rank = 1
+        else:
+            rank = 4
 
-        next_contexts = [get_next_context(m) for m in matches]
-
+        for m, score in zip(matches[:max_sources], scores[:max_sources]):
+            vector_id = m.metadata["_additional"]["id"]
+            logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                          f" doc:{m.metadata['doc']['docname']}"
+                          f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+            rank = rank + 1
+        
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -853,6 +885,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return c
 
         if disable_answer:
+
             contexts = [
                 Context(
                     context=match.page_content + next_contexts[idx],
@@ -1024,6 +1057,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     rerank_flag=rerank_flag,
                 )
                 rerank_flag = True
+
 
         if self.prompts.pre is not None:
             chain = make_chain(
