@@ -695,6 +695,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
+            matches_with_score_list = []
+            for match_with_score in matches_with_score:
+                matches_with_score_list.append([match_with_score[0], match_with_score[1]])
+
+            matches_with_score_copy = []
+            for i, match_with_score in enumerate(matches_with_score_list):
+                user_cat = user_category[0]
+                if 'L1' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                    match_with_score[1] = match_with_score[1] * 1.3
+                elif 'L2' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                    match_with_score[1] = match_with_score[1] * 0.9
+                
+                matches_with_score_copy.append(tuple(match_with_score))
+
+            matches_with_score = matches_with_score_copy
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
             scores = sorted([m[1] for m in matches_with_score], reverse=True)
