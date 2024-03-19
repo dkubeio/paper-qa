@@ -703,7 +703,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for i, match_with_score in enumerate(matches_with_score_list):
                 user_cat = user_category[0]
                 if 'L1' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
-                    match_with_score[1] = match_with_score[1] * 1.3
+                    match_with_score[1] = match_with_score[1] * 1.2
                 elif 'L2' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
                     match_with_score[1] = match_with_score[1] * 0.9
                 
