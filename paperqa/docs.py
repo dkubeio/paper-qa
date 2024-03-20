@@ -981,12 +981,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
 
-        rank = 0
-        for c in answer.context:
+        rank = 1
+        for c in answer.contexts:
             vector_id = c.vector_id
             logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{c.weaviate_score:.2f}"
-                          f" doc:{c.text.doc['docname']}"
-                          f" doc source: {c.text.doc_source} state category:{c.text.state_category}")
+                          f" doc:{c.text.doc.docname}"
+                          f" doc source:{c.text.doc_source} state category:{c.text.state_category}")
             rank = rank + 1
 
         # answer.contexts = answer.contexts[:max_sources]
