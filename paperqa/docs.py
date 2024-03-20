@@ -41,8 +41,6 @@ from .utils import (
     md5sum,
 )
 
-total_token_count = 0
-token_count_list = []
 
 class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     """A collection of documents to be used for answering questions."""
@@ -659,10 +657,41 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             return "State"
 
+    def process_matches_with_score(self, answer, matches_with_score):
+        for m in matches_with_score:
+            if isinstance(m[0].metadata["doc"], str):
+                m[0].metadata["doc"] = json.loads(m[0].metadata["doc"])
+
+        # ok now filter
+        #if answer.dockey_filter is not None:
+        #    matches = [
+        #        m
+        #        for m in matches
+        #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
+        #    ]
+
+        # check if it is deleted
+        matches_with_score = [
+            m
+            for m in matches_with_score
+            if m[0].metadata["doc"]["dockey"] not in self.deleted_dockeys
+        ]
+
+        # check if it is already in answer
+        cur_names = [c.text.name for c in answer.contexts]
+        matches_with_score = [m for m in matches_with_score if m[0].metadata["name"] not in cur_names]
+        
+        matches = [match_with_score[0] for match_with_score in matches_with_score]
+        scores = sorted([m[1] for m in matches_with_score], reverse=True)
+        matches, scores = self.filter_unique_matches(matches, scores)
+
+        return matches, scores
+
 
     async def aget_evidence(
         self,
         answer: Answer,
+        expanded_query: Optional[str] = None,
         k: int = 10,  # Number of vectors to retrieve
         max_sources: int = 5,  # Number of scored contexts to use
         marginal_relevance: bool = True,
@@ -675,7 +704,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        rerank_flag: Optional[bool] = False,
+        max_rewriteq_sources: Optional[int] = 0,
+        rerank_level: Optional[int] = 0,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -694,86 +724,128 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
-            start_time = datetime.now()
 
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
-            matches_with_score = self.texts_index.similarity_search_with_score(
+            start_time = datetime.now()
+            query_matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=category_filter
             )
-            logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
+            logging.trace(f"length of matches with score: {len(query_matches_with_score)}")
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
             # matches_with_score is a list of tuples (doc, score)
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-            if rerank_flag:
-                max_sources = 2
+            query_matches_with_score = sorted(query_matches_with_score, key=lambda tup: tup[1], reverse=True)
+            if rerank_level:
+                i = max_sources - rerank_level
+                j = i + 1
+
+                check_sources = 15
+
+                while(i < max_sources and j < check_sources):
+                    if 'GI' in query_matches_with_score[i][0].metadata['doc_source']:
+                        i = i + 1
+                    else:
+                        if 'GI' in query_matches_with_score[j][0].metadata['doc_source']:
+                            if round(query_matches_with_score[i][1],2) == round(query_matches_with_score[j][1], 2):
+                                temp_match = query_matches_with_score[j]
+                                query_matches_with_score[j] = query_matches_with_score[i]
+                                query_matches_with_score[i] = temp_match
+                            i = i + 1
+                    j = j + 1
+
+
+            query_matches, query_scores = self.process_matches_with_score(answer,query_matches_with_score)
+            expanded_query_matches = []
+            expanded_query_scores = []
+            if max_rewriteq_sources:
+                answer.question = expanded_query
+
+                start_time = datetime.now()
+                expanded_query_matches_with_score = self.texts_index.similarity_search_with_score(
+                    answer.question, k=_k, fetch_k=5 * _k,
+                    where_filter=category_filter
+                )
+                end_time = datetime.now()
+                logging.trace(f"length of matches with score: {len(expanded_query_matches_with_score)}")
+                end_time = datetime.now()
+                logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+                
                 matches_with_score_list = []
                 # matches_with_score is a list of tuples (doc, score), make it a list of [docs, score]
-                for idx, match in enumerate(matches_with_score):
+                for idx, match in enumerate(expanded_query_matches_with_score):
                     matches_with_score_list.append([match[0], match[1]])
 
-                matches_with_score = []
+                expanded_query_matches_with_score = []
                 matches_with_score_list_copy = matches_with_score_list.copy()
                 question_category = self.question_category_get(answer.question)
                 if question_category == "State":
                     for idx, match in enumerate(matches_with_score_list_copy):
-                        # print(f"match: {match[0].metadata}")
-                        # if (match[0].metadata["state_category"][0] in state_category and
-                        #         match[0].metadata["doc_source"][0] == "GI"):
                         if (match[0].metadata["state_category"][0] in state_category):
                             matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
 
                 # if the question is going to be the state we multiply with 1.2
                 matches_with_score_list = sorted(matches_with_score_list, key=lambda tup: tup[1], reverse=True)
-                matches_with_score += matches_with_score_list
+                expanded_query_matches_with_score += matches_with_score_list
 
-            i = 0
-            j = 1
-            while(j < len(matches_with_score)):
-                if matches_with_score[j][1] == matches_with_score[i][1] and matches_with_score[j][0].metadata['doc_source'] == 'GI':
-                    a = matches_with_score[j]
-                    matches_with_score[j] = matches_with_score[i]
-                    matches_with_score[i] = a
-                
-                j = j + 1
-                i = i + 1
-
+                expanded_query_matches, expanded_query_scores = self.process_matches_with_score(answer, expanded_query_matches_with_score)
+            
             # sort the matches based on the updated score
             # matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-            matches = [match_with_score[0] for match_with_score in matches_with_score]
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
-            matches, scores = self.filter_unique_matches(matches, scores)
+        #     matches = [match_with_score[0] for match_with_score in matches_with_score]
+        #     scores = sorted([m[1] for m in matches_with_score], reverse=True)
+        #     matches, scores = self.filter_unique_matches(matches, scores)
 
 
-        for m in matches:
-            if isinstance(m.metadata["doc"], str):
-                m.metadata["doc"] = json.loads(m.metadata["doc"])
+        # for m in matches:
+        #     if isinstance(m.metadata["doc"], str):
+        #         m.metadata["doc"] = json.loads(m.metadata["doc"])
 
-        # ok now filter
-        #if answer.dockey_filter is not None:
-        #    matches = [
-        #        m
-        #        for m in matches
-        #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
-        #    ]
+        # # ok now filter
+        # #if answer.dockey_filter is not None:
+        # #    matches = [
+        # #        m
+        # #        for m in matches
+        # #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
+        # #    ]
 
-        # check if it is deleted
-        matches = [
-            m
-            for m in matches
-            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
-        ]
+        # # check if it is deleted
+        # matches = [
+        #     m
+        #     for m in matches
+        #     if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
+        # ]
 
-        # check if it is already in answer
-        cur_names = [c.text.name for c in answer.contexts]
-        matches = [m for m in matches if m.metadata["name"] not in cur_names]
+        # # check if it is already in answer
+        # cur_names = [c.text.name for c in answer.contexts]
+        # matches = [m for m in matches if m.metadata["name"] not in cur_names]
+        
+        vids = [ m.metadata["_additional"]["id"] for m in query_matches[:3]]
+        itr = 0
+        ctr = 0
+        while(ctr < max_rewriteq_sources):
+            if expanded_query_matches[itr].metadata["_additional"]["id"] in vids:
+                expanded_query_matches.pop(itr)
+                expanded_query_scores.pop(itr)
+                itr = itr - 1
+            else:
+                ctr = ctr + 1
+            itr = itr + 1
+        
 
         # now fnally cut down
-        matches = matches[:max_sources]
+        matches = []
+        scores = []
+        if max_rewriteq_sources:
+            matches = query_matches[:max_sources] + expanded_query_matches[:max_rewriteq_sources]
+            scores = query_scores[:max_sources] + expanded_query_scores[:max_rewriteq_sources]
+        else:
+            matches = query_matches[:max_sources]
+            scores = query_scores[:max_sources]
+
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -803,35 +875,41 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return parent_chunk, token_count
 
         # next_contexts = [get_next_context(m) for m in matches]
-        global total_token_count
-        global total_count_list
+        total_token_count = 0
+        token_count_list = []
         max_count = 7000
         next_contexts = []
-        for m in matches:
-            next_context, token_count = get_next_context(m)
-            if (total_token_count + int(m.metadata['token_count']) + token_count) < max_count:
-                total_token_count = total_token_count + int(m.metadata['token_count']) + token_count
-                next_contexts.append(next_context)
-                token_count_list.append(int(m.metadata['token_count']) + token_count)
-            else:
-                if answer.contexts:
-                    answer.contexts.pop(-1)
-                    total_token_count = total_token_count - token_count_list.pop(2)
-                total_token_count = total_token_count + int(m.metadata['token_count']) + token_count
-                next_contexts.append(next_context)
-                token_count_list.append(int(m.metadata['token_count']) + token_count)
         
-        if not rerank_flag:
-            rank = 1
-        else:
-            rank = 4
+        i = 0
+        while(i < len(matches)):
+            next_context, token_count = get_next_context(matches[i])
+            if (total_token_count + int(matches[i].metadata['token_count']) + token_count) < max_count:
+                total_token_count = total_token_count + int(matches[i].metadata['token_count']) + token_count
+                next_contexts.append(next_context)
+                token_count_list.append(int(matches[i].metadata['token_count']) + token_count)
+            else:
+                if i >= max_sources:
+                    matches.pop(max_sources - 1)
+                    total_token_count = total_token_count - token_count_list.pop(max_sources-1)
+                    scores.pop(max_sources - 1)
+                    i = i - 1
+                total_token_count = total_token_count + int(matches[i].metadata['token_count']) + token_count
+                next_contexts.append(next_context)
+                token_count_list.append(int(matches[i].metadata['token_count']) + token_count)
+                        
+            i = i + 1
 
-        for m, score in zip(matches[:max_sources], scores[:max_sources]):
-            vector_id = m.metadata["_additional"]["id"]
-            logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                          f" doc:{m.metadata['doc']['docname']}"
-                          f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-            rank = rank + 1
+        # if not rerank_flag:
+        #     rank = 1
+        # else:
+        #     rank = 4
+
+        # for m, score in zip(matches[:max_sources], scores[:max_sources]):
+        #     vector_id = m.metadata["_additional"]["id"]
+        #     logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+        #                   f" doc:{m.metadata['doc']['docname']}"
+        #                   f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+        #     rank = rank + 1
         
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -897,12 +975,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
+                        state_category=match.metadata["state_category"],
+                        doc_source=match.metadata["doc_source"],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
                 for idx, match in enumerate(matches)
             ]
-
         else:
             if reranker:
                 start_time = datetime.now()
@@ -951,6 +1030,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
+
+        rank = 0
+        for c in answer.context:
+            vector_id = c.vector_id
+            logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{c.weaviate_score:.2f}"
+                          f" doc:{c.text.doc['docname']}"
+                          f" doc source: {c.text.doc_source} state category:{c.text.state_category}")
+            rank = rank + 1
+
         # answer.contexts = answer.contexts[:max_sources]
         context_str = "\n\n".join(
             [
@@ -1007,8 +1095,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
     async def aquery(
         self,
-        # query: str,
-        queries: List[str],
+        query: str,
+        expanded_query: Optional[str] = None,
         k: int = 10,
         max_sources: int = 5,
         length_prompt: str = "about 100 words",
@@ -1023,11 +1111,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
+        max_rewriteq_sources: Optional[int] = 0,
+        rerank_level: Optional[int] = 0,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
         if answer is None:
-            answer = Answer(question=queries[0], answer_length=length_prompt)
+            answer = Answer(question=query, answer_length=length_prompt)
             answer.trace_id = trace_id
 
         if len(answer.contexts) == 0:
@@ -1039,25 +1129,23 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
                 if len(keys) > 0:
                     answer.dockey_filter = keys
-            rerank_flag = False
-            for query in queries:
-                answer.question = query
-                answer = await self.aget_evidence(
-                    answer,
-                    k=k,
-                    max_sources=max_sources,
-                    marginal_relevance=marginal_relevance,
-                    get_callbacks=get_callbacks,
-                    disable_answer=disable_answer,
-                    reranker=reranker,
-                    trace_id=trace_id,
-                    state_category=state_category,
-                    designation_category=designation_category,
-                    topic=topic,
-                    rerank_flag=rerank_flag,
-                )
-                rerank_flag = True
-
+            
+            answer = await self.aget_evidence(
+                answer,
+                expanded_query,
+                k=k,
+                max_sources=max_sources,
+                marginal_relevance=marginal_relevance,
+                get_callbacks=get_callbacks,
+                disable_answer=disable_answer,
+                reranker=reranker,
+                trace_id=trace_id,
+                state_category=state_category,
+                designation_category=designation_category,
+                topic=topic,
+                max_rewriteq_sources=max_rewriteq_sources,
+                rerank_level=rerank_level,
+            )
 
         if self.prompts.pre is not None:
             chain = make_chain(
