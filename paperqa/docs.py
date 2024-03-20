@@ -662,14 +662,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if isinstance(m[0].metadata["doc"], str):
                 m[0].metadata["doc"] = json.loads(m[0].metadata["doc"])
 
-        # ok now filter
-        #if answer.dockey_filter is not None:
-        #    matches = [
-        #        m
-        #        for m in matches
-        #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
-        #    ]
-
         # check if it is deleted
         matches_with_score = [
             m
@@ -793,36 +785,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                 expanded_query_matches, expanded_query_scores = self.process_matches_with_score(answer, expanded_query_matches_with_score)
             
-            # sort the matches based on the updated score
-            # matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-        #     matches = [match_with_score[0] for match_with_score in matches_with_score]
-        #     scores = sorted([m[1] for m in matches_with_score], reverse=True)
-        #     matches, scores = self.filter_unique_matches(matches, scores)
-
-
-        # for m in matches:
-        #     if isinstance(m.metadata["doc"], str):
-        #         m.metadata["doc"] = json.loads(m.metadata["doc"])
-
-        # # ok now filter
-        # #if answer.dockey_filter is not None:
-        # #    matches = [
-        # #        m
-        # #        for m in matches
-        # #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
-        # #    ]
-
-        # # check if it is deleted
-        # matches = [
-        #     m
-        #     for m in matches
-        #     if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
-        # ]
-
-        # # check if it is already in answer
-        # cur_names = [c.text.name for c in answer.contexts]
-        # matches = [m for m in matches if m.metadata["name"] not in cur_names]
-        
         vids = [ m.metadata["_additional"]["id"] for m in query_matches[:3]]
         itr = 0
         ctr = 0
@@ -899,18 +861,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         
             i = i + 1
 
-        # if not rerank_flag:
-        #     rank = 1
-        # else:
-        #     rank = 4
-
-        # for m, score in zip(matches[:max_sources], scores[:max_sources]):
-        #     vector_id = m.metadata["_additional"]["id"]
-        #     logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-        #                   f" doc:{m.metadata['doc']['docname']}"
-        #                   f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-        #     rank = rank + 1
-        
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
