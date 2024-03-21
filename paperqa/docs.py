@@ -583,7 +583,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             "operator": "ContainsAny",
                             "valueText": list(topics)
                         },{
-                            "path": ["role"],
+                            "path": ["user_category"],
                             "operator": "ContainsAny",
                             "valueText": list(role)
                         }]
@@ -600,7 +600,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             "operator": "ContainsAny",
                             "valueText": list(designation_category)
                         },{
-                            "path": ["role"],
+                            "path": ["user_category"],
                             "operator": "ContainsAny",
                             "valueText": list(role)
                         }]
@@ -758,9 +758,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches_with_score_copy = []
             for i, match_with_score in enumerate(matches_with_score_list):
                 role_cat = role[0]
-                if 'L1' == role_cat and role_cat in match_with_score[0].metadata['role']:
+                if 'L1' == role_cat and role_cat in match_with_score[0].metadata['user_category']:
                     match_with_score[1] = match_with_score[1] * 1.2
-                elif 'L2' == role_cat and role_cat in match_with_score[0].metadata['role']:
+                elif 'L2' == role_cat and role_cat in match_with_score[0].metadata['user_category']:
                     match_with_score[1] = match_with_score[1] * 0.9
                 
                 matches_with_score_copy.append(tuple(match_with_score))
