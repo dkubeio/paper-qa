@@ -981,13 +981,27 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
 
-        rank = 1
-        for c in answer.contexts:
-            vector_id = c.vector_id
-            logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{c.weaviate_score:.2f}"
-                          f" doc:{c.text.doc.docname}"
-                          f" doc source:{c.text.doc_source} state category:{c.text.state_category}")
-            rank = rank + 1
+        # rank = 1
+        # for c in answer.contexts:
+        #     vector_id = c.vector_id
+        #     logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{c.weaviate_score:.2f}"
+        #                   f" doc:{c.text.doc.docname}"
+        #                   f" doc source:{c.text.doc_source} state category:{c.text.state_category}")
+        #     rank = rank + 1
+
+        matched_chunks_dict_list = []
+        for rank, c in enumerate(answer.contexts):
+            dict_ = {}
+            dict_["rank"]=rank+1
+            dict_["id"]=c.vector_id
+            dict_["score"]=float("{:.2f}".format(c.weaviate_score))
+            dict_["doc"]=c.text.doc.docname
+            dict_["doc source"]=c.text.doc_source
+            dict_["state category"]=c.text.state_category
+
+            matched_chunks_dict_list.append(dict_)
+
+        logging.trace(f"trace_id:{trace_id} matches:{matched_chunks_dict_list}")
 
         # answer.contexts = answer.contexts[:max_sources]
         context_str = "\n\n".join(
