@@ -545,10 +545,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], user_category: Tuple[str], topics: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], role: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics} user_category:{user_category}")
+        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics} role:{role}")
 
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -560,9 +560,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             state_category = set(state_category)
             state_category.add("General")
 
-            if user_category:
-                user_category = set(user_category)
-                user_category.add('General')
+            if role:
+                role = set(role)
+                role.add('General')
 
                 if topics:
                     if topics[0] == "All" or "Broker" in designation_category:
@@ -583,9 +583,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             "operator": "ContainsAny",
                             "valueText": list(topics)
                         },{
-                            "path": ["user_category"],
+                            "path": ["role"],
                             "operator": "ContainsAny",
-                            "valueText": list(user_category)
+                            "valueText": list(role)
                         }]
                     }
                 else:
@@ -600,9 +600,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             "operator": "ContainsAny",
                             "valueText": list(designation_category)
                         },{
-                            "path": ["user_category"],
+                            "path": ["role"],
                             "operator": "ContainsAny",
-                            "valueText": list(user_category)
+                            "valueText": list(role)
                         }]
                     }
             else:
@@ -718,7 +718,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         trace_id: Optional[str] = None,
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
-        user_category: Optional[Tuple[str]] = None,
+        role: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
     ) -> Answer:
         if disable_vector_search:
@@ -740,7 +740,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
 
-            category_filter = self.category_filter_get(state_category, designation_category, user_category, topic)
+            category_filter = self.category_filter_get(state_category, designation_category, role, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -757,10 +757,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             matches_with_score_copy = []
             for i, match_with_score in enumerate(matches_with_score_list):
-                user_cat = user_category[0]
-                if 'L1' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                role_cat = role[0]
+                if 'L1' == role_cat and role_cat in match_with_score[0].metadata['role']:
                     match_with_score[1] = match_with_score[1] * 1.2
-                elif 'L2' == user_cat and user_cat in match_with_score[0].metadata['user_category']:
+                elif 'L2' == role_cat and role_cat in match_with_score[0].metadata['role']:
                     match_with_score[1] = match_with_score[1] * 0.9
                 
                 matches_with_score_copy.append(tuple(match_with_score))
@@ -1022,7 +1022,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        user_category: Optional[Tuple[str]] = None,
+        role: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
@@ -1052,7 +1052,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 trace_id=trace_id,
                 state_category=state_category,
                 designation_category=designation_category,
-                user_category=user_category,
+                role=role,
                 topic=topic,
             )
 
