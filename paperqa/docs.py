@@ -1060,6 +1060,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     async def aquery(
         self,
         query: str,
+        query_acr: str,
         expanded_query: Optional[str] = None,
         k: int = 10,
         max_sources: int = 5,
@@ -1081,7 +1082,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
         if answer is None:
-            answer = Answer(question=query, answer_length=length_prompt)
+            answer = Answer(question=query_acr, answer_length=length_prompt)
             answer.trace_id = trace_id
 
         if len(answer.contexts) == 0:
@@ -1110,6 +1111,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 max_rewriteq_sources=max_rewriteq_sources,
                 rerank_level=rerank_level,
             )
+
+            answer.question = query
 
         if self.prompts.pre is not None:
             chain = make_chain(
