@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any, Literal
+from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
 import glob
 import traceback
 from urllib.parse import quote
@@ -649,15 +649,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
-    # this function returns if the question is a general or a state question
-    def question_category_get(self, question) -> Literal["General", "State"]:
-        general_key_words = ["ticket", "irs", "taxes", "1095", "citizenship", "verify"]
-        if any(word in question.lower() for word in general_key_words):
-            return "General"
-        else:
-            return "State"
-
-
     async def aget_evidence(
         self,
         answer: Answer,
@@ -705,31 +696,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
             # matches_with_score is a list of tuples (doc, score)
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-
-            matches_with_score_list = []
-            # matches_with_score is a list of tuples (doc, score), make it a list of [docs, score]
-            for idx, match in enumerate(matches_with_score):
-                matches_with_score_list.append([match[0], match[1]])
-
-            matches_with_score_list_copy = matches_with_score_list.copy()
-            question_category = self.question_category_get(answer.question)
-            if question_category == "State":
-                for idx, match in enumerate(matches_with_score_list_copy):
-                    if (match[0].metadata["state_category"][0] in state_category and
-                            match[0].metadata["doc_source"][0] == "GI"):
-                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.2
-                    elif (match[0].metadata["state_category"][0] in state_category and
-                          match[0].metadata["doc_source"][0] == "External"):
-                        matches_with_score_list[idx][1] = matches_with_score_list[idx][1] * 1.1
-
-            # if the question is going to be the state we multiply with 1.2
-            matches_with_score = matches_with_score_list
-
-            # sort the matches based on the updated score
+            # fetch all the scores in a list, sort them in descending order
+            scores = sorted([m[1] for m in matches_with_score], reverse=True)
             matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
             matches = [match_with_score[0] for match_with_score in matches_with_score]
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
+
             matches, scores = self.filter_unique_matches(matches, scores)
 
             rank = 1
@@ -845,7 +816,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 score=get_score(context),
             )
             return c
-
         if disable_answer:
             contexts = [
                 Context(
@@ -857,7 +827,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
+                        state_category=match.metadata["state_category"],
                         ext_path=match.metadata["ext_path"],
+                        doc_source = match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
@@ -1014,117 +986,120 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 topic=topic,
             )
 
-        if self.prompts.pre is not None:
-            chain = make_chain(
-                self.prompts.pre,
-                cast(BaseLanguageModel, self.llm),
-                memory=self.memory_model,
-                system_prompt=self.prompts.system,
-            )
-            pre = await chain.arun(
-                question=answer.question, callbacks=get_callbacks("pre")
-            )
-            answer.context = pre + "\n\n" + answer.context
+        # if self.prompts.pre is not None:
+        #     chain = make_chain(
+        #         self.prompts.pre,
+        #         cast(BaseLanguageModel, self.llm),
+        #         memory=self.memory_model,
+        #         system_prompt=self.prompts.system,
+        #     )
+        #     pre = await chain.arun(
+        #         question=answer.question, callbacks=get_callbacks("pre")
+        #     )
+        #     answer.context = pre + "\n\n" + answer.context
 
 
-        bib = dict()
-        if len(answer.context) < 10 and not self.memory:
-            answer_text = (
-                "I cannot answer this question due to insufficient information."
-            )
-        else:
-            start_time = datetime.now()
-            callbacks = get_callbacks("answer")
-            if self.memory_model:
-                memory_str = str(self.memory_model.load_memory_variables({})["memory"])
-                logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
+        # bib = dict()
+        # if len(answer.context) < 10 and not self.memory:
+        #     answer_text = (
+        #         "I cannot answer this question due to insufficient information."
+        #     )
+        # else:
+        #     start_time = datetime.now()
+        #     callbacks = get_callbacks("answer")
+        #     if self.memory_model:
+        #         memory_str = str(self.memory_model.load_memory_variables({})["memory"])
+        #         logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
-            if self.memory_model and self.memory_model.buffer:
-                followup_chain = make_chain(
-                    self.prompts.followup,
-                    cast(BaseLanguageModel, self.llm),
-                    # memory=self.memory_model,
-                    system_prompt=self.prompts.system,
-                )
-                previous_question = self.memory_model.buffer[-2].content
-                try:
-                    followup_question = await followup_chain.arun(
-                        previous_question=previous_question,
-                        question=answer.question,
-                        # callbacks=callbacks,
-                    )
-                except Exception as e:
-                    followup_question = str(e)
-                answer.question = followup_question
-                logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
+        #     if self.memory_model and self.memory_model.buffer:
+        #         followup_chain = make_chain(
+        #             self.prompts.followup,
+        #             cast(BaseLanguageModel, self.llm),
+        #             # memory=self.memory_model,
+        #             system_prompt=self.prompts.system,
+        #         )
+        #         previous_question = self.memory_model.buffer[-2].content
+        #         try:
+        #             followup_question = await followup_chain.arun(
+        #                 previous_question=previous_question,
+        #                 question=answer.question,
+        #                 # callbacks=callbacks,
+        #             )
+        #         except Exception as e:
+        #             followup_question = str(e)
+        #         answer.question = followup_question
+        #         logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
 
-            qa_chain = make_chain(
-                self.prompts.qa,
-                cast(BaseLanguageModel, self.llm),
-                memory=self.memory_model,
-                system_prompt=self.prompts.system,
-            )
+        #     qa_chain = make_chain(
+        #         self.prompts.qa,
+        #         cast(BaseLanguageModel, self.llm),
+        #         memory=self.memory_model,
+        #         system_prompt=self.prompts.system,
+        #     )
 
-            try:
-                logging.trace(f"trace_id:{trace_id} context:{answer.context}")
-                answer_text = await qa_chain.arun(
-                    context=answer.context,
-                    answer_length=answer.answer_length,
-                    question=answer.question,
-                    callbacks=callbacks,
-                )
-            except Exception as e:
-                answer_text = str(e)
+        #     try:
+        #         logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+        #         answer_text = await qa_chain.arun(
+        #             context=answer.context,
+        #             answer_length=answer.answer_length,
+        #             question=answer.question,
+        #             callbacks=callbacks,
+        #         )
+        #     except Exception as e:
+        #         answer_text = str(e)
 
-            end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
+        #     end_time = datetime.now()
+        #     logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
 
-        # it still happens
-        if "(Example2012)" in answer_text:
-            answer_text = answer_text.replace("(Example2012)", "")
+        # # it still happens
+        # if "(Example2012)" in answer_text:
+        #     answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = ""
-        for i, c in enumerate(answer.contexts):
-            name = c.text.name
-            citation = c.text.doc.citation
+        # bib_str = ""
+        # for i, c in enumerate(answer.contexts):
+        #     name = c.text.name
+        #     citation = c.text.doc.citation
 
-            # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
-            #   bib[name] = citation
-            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
-            if c.text.ext_path:
-                url = SHARE_POINT_URL + quote(c.text.ext_path)
-                bib_str += f"\n {i+1}. [{name}]({url})"
-            else:
-                if name != citation:
-                    bib_str += f"\n {i+1}. {name}: {citation}"
-                else:
-                    bib_str += f"\n {i+1}. {citation}"
+        #     # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
+        #     #if name_in_text(name, answer_text):
+        #     #   bib[name] = citation
+        #     SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+        #     if c.text.ext_path:
+        #         if c.text.doc_source.lower() == 'external':
+        #             url = c.text.ext_path
+        #         else:
+        #             url = SHARE_POINT_URL + quote(c.text.ext_path)
+        #         bib_str += f"\n {i+1}. [{name}]({url})"
+        #     else:
+        #         if name != citation:
+        #             bib_str += f"\n {i+1}. {name}: {citation}"
+        #         else:
+        #             bib_str += f"\n {i+1}. {citation}"
 
-        formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
-        if len(bib) > 0:
-            formatted_answer += f"\nReferences\n\n{bib_str}\n"
-        answer.answer = answer_text
-        answer.formatted_answer = formatted_answer
-        answer.references = bib_str
+        # formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
+        # if len(bib) > 0:
+        #     formatted_answer += f"\nReferences\n\n{bib_str}\n"
+        # answer.answer = answer_text
+        # answer.formatted_answer = formatted_answer
+        # answer.references = bib_str
 
-        if self.prompts.post is not None:
-            chain = make_chain(
-                self.prompts.post,
-                cast(BaseLanguageModel, self.llm),
-                memory=self.memory_model,
-                system_prompt=self.prompts.system,
-            )
-            post = await chain.arun(**answer.dict(), callbacks=get_callbacks("post"))
-            answer.answer = post
-            answer.formatted_answer = f"Question: {answer.question}\n\n{post}\n"
-            if len(bib) > 0:
-                answer.formatted_answer += f"\nReferences\n\n{bib_str}\n"
-        if self.memory_model is not None and not anchor_flag:
-            answer.memory = self.memory_model.load_memory_variables(inputs={})["memory"]
-            self.memory_model.save_context(
-                {"Question": answer.question}, {"Answer": answer.answer}
-            )
-            self.memory_model.clear(self.memory_model.k)
+        # if self.prompts.post is not None:
+        #     chain = make_chain(
+        #         self.prompts.post,
+        #         cast(BaseLanguageModel, self.llm),
+        #         memory=self.memory_model,
+        #         system_prompt=self.prompts.system,
+        #     )
+        #     post = await chain.arun(**answer.dict(), callbacks=get_callbacks("post"))
+        #     answer.answer = post
+        #     answer.formatted_answer = f"Question: {answer.question}\n\n{post}\n"
+        #     if len(bib) > 0:
+        #         answer.formatted_answer += f"\nReferences\n\n{bib_str}\n"
+        # if self.memory_model is not None and not anchor_flag:
+        #     answer.memory = self.memory_model.load_memory_variables(inputs={})["memory"]
+        #     self.memory_model.save_context(
+        #         {"Question": answer.question}, {"Answer": answer.answer}
+        #     )
+        #     self.memory_model.clear(self.memory_model.k)
 
         return answer
