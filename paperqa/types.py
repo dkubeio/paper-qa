@@ -55,6 +55,16 @@ class Text(BaseModel):
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
 
+class Faq_Text(BaseModel):
+    question: str
+    answer: str
+    trace_id: str
+    doc: Doc
+    vector_id: str
+    state_category: List[str]
+    designation_category: List[str]
+    embeddings: Optional[List[float]] = None
+    gi_faq: Optional[bool] = False
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
@@ -152,7 +162,7 @@ class Answer(BaseModel):
     cost: Optional[float] = None
     token_counts: Optional[Dict[str, List[int]]] = None
     trace_id: Optional[str] = None
-
+    faq_weaviate_score: Optional[float] = None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
