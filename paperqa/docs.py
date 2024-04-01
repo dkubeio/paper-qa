@@ -687,7 +687,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [match_with_score[0] for match_with_score in matches_with_score]
         # matches, scores = self.filter_unique_matches(matches, scores)
 
-        print(f"matches length len: {len(matches)}")
+        # print(f"matches length len: {len(matches)}")
 
         follow_on_questions = []
         for idx in range(min([max_sources, len(matches)])):
