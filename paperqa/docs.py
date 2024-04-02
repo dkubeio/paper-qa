@@ -579,10 +579,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         "path": ["topic"],
                         "operator": "ContainsAny",
                         "valueText": list(topics)
-                    }, {
-                        "path": ["follow_on_question"],
-                        "operator": "Equal",
-                        "valueBoolean": follow_on_question
                     }]
                 }
             else:
@@ -596,10 +592,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         "path": ["designation_category"],
                         "operator": "ContainsAny",
                         "valueText": list(designation_category)
-                    }, {
-                        "path": ["follow_on_question"],
-                        "operator": "Equal",
-                        "valueBoolean": follow_on_question
                     }]
                 }
 
@@ -760,17 +752,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
                               f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-                # print(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                #       f" doc:{m.metadata['follow_on_question']}"
-                #       f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
                 rank += 1
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
-        follow_on_questions = self.get_follow_on_questions(
-            answer, k, max_sources, trace_id, state_category, designation_category, topic)
+        follow_on_questions = []
+        for idx in range(len(matches)):
+            embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+            if answer.question not in embed_text:
+                follow_on_questions.append(embed_text)
 
         answer.follow_on_questions = follow_on_questions
 
@@ -800,30 +792,30 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
-        def get_next_context(source):
-            doc_vector_ids = source.metadata['doc_vector_ids']
-            parent_chunk = ''
-            vid = ''
-            if len(doc_vector_ids) > 3:
-                sid = source.metadata['_additional']['id']
-                sid_index = doc_vector_ids.index(sid)
-
-                if not sid_index:
-                    vid = doc_vector_ids[sid_index + 3]
-                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
-                    vid = doc_vector_ids[sid_index + 2]
-                
-                if vid != '':
-                    data_object = self.texts_index._client.data_object.get_by_id(
-                        vid,
-                        class_name=self.texts_index._index_name,
-                    )
-
-                    parent_chunk = data_object['properties']['parent_chunk']
-
-            return parent_chunk
-
-        next_contexts = [get_next_context(m) for m in matches]
+        # def get_next_context(source):
+        #     doc_vector_ids = source.metadata['doc_vector_ids']
+        #     parent_chunk = ''
+        #     vid = ''
+        #     if len(doc_vector_ids) > 3:
+        #         sid = source.metadata['_additional']['id']
+        #         sid_index = doc_vector_ids.index(sid)
+        #
+        #         if not sid_index:
+        #             vid = doc_vector_ids[sid_index + 3]
+        #         elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+        #             vid = doc_vector_ids[sid_index + 2]
+        #
+        #         if vid != '':
+        #             data_object = self.texts_index._client.data_object.get_by_id(
+        #                 vid,
+        #                 class_name=self.texts_index._index_name,
+        #             )
+        #
+        #             parent_chunk = data_object['properties']['parent_chunk']
+        #
+        #     return parent_chunk
+        #
+        # next_contexts = [get_next_context(m) for m in matches]
 
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -879,16 +871,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if disable_answer:
             contexts = [
                 Context(
-                    context=match.page_content + next_contexts[idx],
+                    context=match.page_content,  # + next_contexts[idx],
                     score=10,
                     weaviate_score=scores[idx],
                     text=Text(
-                        text=match.page_content + next_contexts[idx],
+                        text=match.page_content,  # + next_contexts[idx],
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
-                        doc_source = match.metadata["doc_source"][0],
+                        doc_source=match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
