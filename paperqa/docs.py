@@ -962,7 +962,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-
+        print(answer.question)
         matches_with_score = self.texts_index.similarity_search_with_score(
             answer.question, k=k, fetch_k=k,
             where_filter=category_filter
@@ -970,21 +970,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         answer.answer = matches_with_score[0][0].page_content
         answer.faq_weaviate_score = matches_with_score[0][1]
-
+        answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
         return answer
 
 
     async def weaviate_call(
         self,
         query: str,
-        k: int = 10,
-        max_sources: int = 5,
-        marginal_relevance: bool = True,
+        k: Optional[int] = 10,
+        max_sources: Optional[int] = 5,
+        marginal_relevance: Optional[bool] = True,
         answer: Optional[Answer] = None,
-        length_prompt: str = "about 100 words",
+        length_prompt: Optional[str] = "about 100 words",
         key_filter: Optional[bool] = None,
-        get_callbacks: CallbackFactory = lambda x: None,
-        disable_answer: bool = False,
+        get_callbacks: Optional[CallbackFactory] = lambda x: None,
+        disable_answer: Optional[bool] = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
         state_category: Optional[Tuple[str]] = None,
