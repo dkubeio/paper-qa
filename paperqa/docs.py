@@ -763,10 +763,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
         follow_on_questions = []
-        for idx in range(len(matches)):
+        idx = 0
+        while len(set(follow_on_questions)) < max_sources:
             embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-            if answer.question not in embed_text:
+            if answer.question not in embed_text and embed_text not in follow_on_questions:
                 follow_on_questions.append(embed_text)
+
+            idx += 1
 
         answer.follow_on_questions = follow_on_questions
 
