@@ -184,6 +184,64 @@ def parse_json(
 
     return texts
 
+
+
+def parse_pdf_jsons(
+    path: Path, doc: Doc, chunk_chars: int, overlap: int,
+    text_splitter: TextSplitter=None, categories: str=None
+) -> List[List[Text]]:
+    if text_splitter is None:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_chars, chunk_overlap=overlap,
+                length_function=len, is_separator_regex=False,
+            )
+    all_texts = []
+    pdf_file_contents = []
+    dir_path = str(path)
+    # for filename in os.listdir(dir_path):
+    for i in range(len(os.listdir(dir_path))):
+        file_path = dir_path / f"page_{i+1}.json"
+        if file_path.is_file() and file_path.suffix == '.json':
+            try:
+                with open(file_path) as f:
+                    file_contents = f.read()
+            except UnicodeDecodeError:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
+                    file_contents = f.read()
+            
+            json_contents = json.loads(file_contents)
+            pdf_file_contents.append(json_contents)
+
+    for i, content in enumerate(pdf_file_contents):
+        if text_splitter.count_tokens(text=content["page_text"]) <= 100:
+            content["is_title"] = True
+            next_content = pdf_file_contents[i+1]
+            next_content["page_text"] = content["page_text"] +  next_content["page_text"]
+
+        if content.get("is_title"):
+            continue
+
+        texts = []
+        is_table = content.get('is_table')
+        is_toc = content.get('is_toc')
+        page_text = content.get('page_text')
+        page_no = content.get('page_no')
+        page_text = page_text.encode("ascii", "ignore").decode()
+        docname = Path(path).name
+        ext_path = content.get('ext_path')
+        raw_texts = text_splitter.split_text(page_text)
+        if not is_toc:
+            texts = [
+                Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
+                    page_no=page_no, ext_path=ext_path)
+                for i, t in enumerate(raw_texts)
+            ]
+        
+        all_texts += texts
+    return all_texts
+
+
+
 def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[Text]:
     with open(path, "r") as f:
         csv_file_data = f.read()
@@ -250,6 +308,8 @@ def read_doc(
     """Parse a document into chunks."""
     str_path = str(path)
     if str_path.endswith(".pdf"):
+        if(os.path.isdir(str_path)):
+            return parse_pdf_jsons(path, doc, chunk_chars, overlap, text_splitter)
         if force_pypdf:
             return parse_pdf(path, doc, chunk_chars, overlap)
 
