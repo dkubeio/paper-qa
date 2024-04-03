@@ -393,13 +393,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
+
         if self.doc_index is not None:
             #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
-            self.doc_index.add_texts([json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+            self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+
         self.docs[doc.dockey] = doc
         if self.texts_index is None:
             self.texts += texts
+
         self.docnames.add(doc.docname)
+
         return True
 
     def delete(
