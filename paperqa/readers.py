@@ -10,11 +10,12 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TextSplitter
 from .types import Doc, Text
 from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
+import os
 
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
-                   overlap: int, text_splitter: TextSplitter = None) -> List[Text]:
+                   overlap: int, text_splitter: TextSplitter = None) -> List[List[Text]]:
     try:
         pdf_texts: List[Text] = []
         if text_splitter is None:
@@ -56,14 +57,14 @@ def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
 
         fitz_file.close()
 
-        return pdf_texts
+        return [pdf_texts]
     except Exception as e:
         print(f"Error in parse_pdf_fitz: {e}")
         traceback.print_exc()
 
 
 def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
-              overlap: int, text_splitter: TextSplitter=None) -> List[Text]:
+              overlap: int, text_splitter: TextSplitter=None) -> List[List[Text]]:
     import pypdf
 
     print("the other code "*5)
@@ -94,13 +95,13 @@ def parse_pdf(path: Path, doc: Doc, chunk_chars: int,
             Text(text=split[:chunk_chars], name=f"{doc.docname} pages {pg}", doc=doc)
         )
     pdfFileObj.close()
-    return texts
+    return [texts]
 
 
 def parse_txt(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     html: bool = False, text_splitter: TextSplitter=None
-) -> List[Text]:
+) -> List[List[Text]]:
     try:
         with open(path) as f:
             text = f.read()
@@ -137,12 +138,12 @@ def parse_txt(
     #     Text(text=t, name=f"{doc.docname} chunk {i}", doc=doc)
     #     for i, t in enumerate(raw_texts)
     # ]
-    return texts
+    return [texts]
 
 def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None, categories: str=None
-) -> List[Text]:
+) -> List[List[Text]]:
     if text_splitter is None:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
@@ -182,8 +183,7 @@ def parse_json(
             for i, t in enumerate(raw_texts)
         ]
 
-    return texts
-
+    return [texts]
 
 
 def parse_pdf_jsons(
@@ -213,12 +213,14 @@ def parse_pdf_jsons(
             pdf_file_contents.append(json_contents)
 
     for i, content in enumerate(pdf_file_contents):
+        # print(i, text_splitter.count_tokens(text=content["page_text"]), content.get('is_toc'))
         if text_splitter.count_tokens(text=content["page_text"]) <= 100:
             content["is_title"] = True
             next_content = pdf_file_contents[i+1]
             next_content["page_text"] = content["page_text"] +  next_content["page_text"]
 
         if content.get("is_title"):
+            print(f"title page number {i}")
             continue
 
         texts = []
@@ -234,15 +236,15 @@ def parse_pdf_jsons(
             texts = [
                 Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
                     page_no=page_no, ext_path=ext_path)
-                for i, t in enumerate(raw_texts)
+                for t in raw_texts
             ]
-        
+        print(len(all_texts))
         all_texts += texts
     return all_texts
 
 
 
-def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[Text]:
+def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:TextSplitter=None) -> List[List[Text]]:
     with open(path, "r") as f:
         csv_file_data = f.read()
 
@@ -261,12 +263,12 @@ def parse_csv(path:Path, doc:Doc, chunk_chars:int, overlap:int, text_splitter:Te
     for text in page_texts:
         csv_texts.append(Text(text=text,csv_text=csv_file_data, name=f"{doc.docname}", doc=doc))
 
-    return csv_texts
+    return [csv_texts]
 
 
 def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int,
                    token_splitter: TextSplitter = None
-) -> List[Text]:
+) -> List[List[Text]]:
     """Parse a document into chunks, based on line numbers (for code)."""
 
     split = ""
@@ -294,7 +296,7 @@ def parse_code_txt(path: Path, doc: Doc, chunk_chars: int, overlap: int,
                 doc=doc,
             )
         )
-    return texts
+    return [texts]
 
 
 def read_doc(
@@ -307,8 +309,10 @@ def read_doc(
 ) -> List[Text]:
     """Parse a document into chunks."""
     str_path = str(path)
-    if str_path.endswith(".pdf"):
-        if(os.path.isdir(str_path)):
+    if ".pdf" in str_path:
+        print(str(path))
+        if os.path.isdir(str_path):
+            print("It is a dir")
             return parse_pdf_jsons(path, doc, chunk_chars, overlap, text_splitter)
         if force_pypdf:
             return parse_pdf(path, doc, chunk_chars, overlap)
@@ -325,6 +329,7 @@ def read_doc(
         return parse_txt(path, doc, chunk_chars, overlap, html=True, text_splitter=text_splitter)
 
     elif str_path.endswith(".json") and "meta_data.json":
+        print("It is json")
         return parse_json(path, doc, chunk_chars, overlap, text_splitter)
 
     elif str_path.endswith(".csv"):

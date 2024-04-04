@@ -266,13 +266,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             # peak first chunk
             fake_doc = Doc(docname="", citation="", dockey=dockey)
-            texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
+            all_texts = read_doc(path, fake_doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter,
                              base_dir=base_dir)
-            if len(texts) == 0:
-                raise ValueError(f"Could not read document {path}. Is it empty?")
-            citation = cite_chain.run(texts[0].text)
-            if len(citation) < 3 or "Unknown" in citation or "insufficient" in citation:
-                citation = f"Unknown, {os.path.basename(path)}, {datetime.now().year}"
+            for texts in all_texts:
+                if len(texts) == 0:
+                    raise ValueError(f"Could not read document {path}. Is it empty?")
+                citation = cite_chain.run(texts[0].text)
+                if len(citation) < 3 or "Unknown" in citation or "insufficient" in citation:
+                    citation = f"Unknown, {os.path.basename(path)}, {datetime.now().year}"
 
         if docname is None:
             # get first name and year from citation
@@ -295,53 +296,57 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         docname = self._get_unique_name(docname)
         self.docnames.add(docname)
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
-        texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
+        print("before read_doc")
+        all_texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
-        if (
-            len(texts) == 0
-            or len(texts[0].text) < 10
-            or (not disable_check and not maybe_is_text(texts[0].text))
-        ):
-            raise ValueError(
-                f"This does not look like a text document: {path}. Path disable_check to ignore this error."
-            )
+        all_texts_chunks = []
+        for texts in all_texts:
+            if (
+                len(texts) == 0
+                or len(texts[0].text) < 10
+                or (not disable_check and not maybe_is_text(texts[0].text))
+            ):
+                raise ValueError(
+                    f"This does not look like a text document: {path}. Path disable_check to ignore this error."
+                )
 
-        update_texts = []
-        for index, text in enumerate(texts):
-            update_texts.append(text)
-            if text_splitter.count_tokens(text=text.text) < 100:   
-                if index > 0:
-                    update_texts[index - 1].text += " "
-                    update_texts[index - 1].text += text.text
-                    update_texts.pop(index)
+            update_texts = []
+            for index, text in enumerate(texts):
+                update_texts.append(text)
+                if text_splitter.count_tokens(text=text.text) < 100:   
+                    if index > 0:
+                        update_texts[index - 1].text += " "
+                        update_texts[index - 1].text += text.text
+                        update_texts.pop(index)
 
-        if update_texts and Path(path).suffix == ".json":
-            docname = update_texts[0].name
+            if update_texts and Path(path).suffix == ".json":
+                docname = update_texts[0].name
 
-        text_chunks = []
-        for x in update_texts:
-            if x.doc.docname.endswith('.csv'):
-                text_chunks.append({
-                    "page": x.name, "text_len": len(x.text),
-                    "chunk": x.text, "vector_id": str(uuid.uuid4()),
-                    "tokens": text_splitter.count_tokens(text=x.text),
-                    "csv_text": x.csv_text, "docname": docname,
-                    "doc_source": x.doc_source,
-                    "state_category": x.state_category,
-                })
-            else:
-                text_chunks.append({
-                    "page": x.name, "text_len": len(x.text),
-                    "chunk": x.text, "vector_id": str(uuid.uuid4()),
-                    "tokens": text_splitter.count_tokens(text=x.text),
-                    "page_text": x.page_text, "page_no" : x.page_no,
-                    "is_table": x.is_table, "docname": docname,
-                    "ext_path": x.ext_path,
-                    "doc_source": x.doc_source,
-                    "state_category": x.state_category,
-                })
+            text_chunks = []
+            for x in update_texts:
+                if x.doc.docname.endswith('.csv'):
+                    text_chunks.append({
+                        "page": x.name, "text_len": len(x.text),
+                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
+                        "tokens": text_splitter.count_tokens(text=x.text),
+                        "csv_text": x.csv_text, "docname": docname,
+                        "doc_source": x.doc_source,
+                        "state_category": x.state_category,
+                    })
+                else:
+                    text_chunks.append({
+                        "page": x.name, "text_len": len(x.text),
+                        "chunk": x.text, "vector_id": str(uuid.uuid4()),
+                        "tokens": text_splitter.count_tokens(text=x.text),
+                        "page_text": x.page_text, "page_no" : x.page_no,
+                        "is_table": x.is_table, "docname": docname,
+                        "ext_path": x.ext_path,
+                        "doc_source": x.doc_source,
+                        "state_category": x.state_category,
+                    })
+            all_texts_chunks.append(text_chunks)  
 
-        return docname, text_chunks
+        return all_texts_chunks
 
     def add_texts(
         self,
