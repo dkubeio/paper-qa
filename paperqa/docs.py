@@ -255,7 +255,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     ) -> Tuple[Optional[str], Optional[Dict[Any, Any]]]:
         """Add a document to the collection."""
         if dockey is None:
-            dockey = md5sum(path)
+            # dockey = md5sum(path)
+            dockey = str(uuid.uuid4())
 
         if citation is None:
             # skip system because it's too hesitant to answer
@@ -299,6 +300,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         print("before read_doc")
         all_texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
+        print(len(all_texts))
         all_texts_chunks = []
         for texts in all_texts:
             if (

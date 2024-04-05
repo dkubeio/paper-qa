@@ -197,10 +197,10 @@ def parse_pdf_jsons(
             )
     all_texts = []
     pdf_file_contents = []
-    dir_path = str(path)
+    dir_path = path
     # for filename in os.listdir(dir_path):
     for i in range(len(os.listdir(dir_path))):
-        file_path = dir_path / f"page_{i+1}.json"
+        file_path = dir_path / Path(f"page_{i+1}.json")
         if file_path.is_file() and file_path.suffix == '.json':
             try:
                 with open(file_path) as f:
@@ -216,11 +216,12 @@ def parse_pdf_jsons(
         # print(i, text_splitter.count_tokens(text=content["page_text"]), content.get('is_toc'))
         if text_splitter.count_tokens(text=content["page_text"]) <= 100:
             content["is_title"] = True
-            next_content = pdf_file_contents[i+1]
-            next_content["page_text"] = content["page_text"] +  next_content["page_text"]
+            if i < len(pdf_file_contents)-1:
+                next_content = pdf_file_contents[i+1]
+                next_content["page_text"] = content["page_text"] +  next_content["page_text"]
 
         if content.get("is_title"):
-            print(f"title page number {i}")
+            # print(f"title page number {i}")
             continue
 
         texts = []
@@ -238,8 +239,7 @@ def parse_pdf_jsons(
                     page_no=page_no, ext_path=ext_path)
                 for t in raw_texts
             ]
-        print(len(all_texts))
-        all_texts += texts
+        all_texts.append(texts)
     return all_texts
 
 
