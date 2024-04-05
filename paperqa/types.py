@@ -61,6 +61,7 @@ class Faq_Text(BaseModel):
     trace_id: str
     doc: Doc
     vector_id: str
+    references: str 
     state_category: List[str]
     designation_category: List[str]
     embeddings: Optional[List[float]] = None

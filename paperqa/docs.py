@@ -969,6 +969,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.faq_weaviate_score = matches_with_score[0][1]
         answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
         answer.faq_doc = matches_with_score[0][0].metadata['doc']
+        answer.references = matches_with_score[0][0].metadata['references']
+        answer.trace_id = trace_id
+
         return answer
 
 
