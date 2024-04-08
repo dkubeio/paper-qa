@@ -971,6 +971,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.faq_doc = matches_with_score[0][0].metadata['doc']
         answer.references = matches_with_score[0][0].metadata['references']
         answer.trace_id = trace_id
+        answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
         return answer
 
