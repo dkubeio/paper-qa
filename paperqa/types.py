@@ -168,6 +168,7 @@ class Answer(BaseModel):
     faq_weaviate_score: Optional[float] = None
     faq_vector_id: Optional[str] = ''
     faq_doc: Optional[Doc] = None
+    faq_match_question: Optional[str]=None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
