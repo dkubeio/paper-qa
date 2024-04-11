@@ -349,6 +349,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         doc: Doc,
         is_csv: Optional[bool] = None,
         faq_texts: Optional[List[Faq_Text]] = [],
+        gi_faq: Optional[bool] = False,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -370,7 +371,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
-            if texts[0].gi_faq:
+            if gi_faq:
                 text_embeddings = self.embeddings.embed_documents([t.question for t in texts])
             else:
                 text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
@@ -386,7 +387,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.csv_text, x.embeddings), texts)
                     )
-                elif texts[0].gi_faq:
+                elif gi_faq:
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.answer, x.embeddings), texts)
                     )
@@ -396,7 +397,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     )
 
                 vector_ids = [x.vector_id for x in texts]
-                if texts[0].gi_faq :
+                if gi_faq :
                     self.texts_index.add_embeddings(  # type: ignore
                         vec_store_text_and_embeddings,
                         ids=vector_ids,
@@ -424,23 +425,36 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self, name: Optional[str] = None, dockey: Optional[DocKey] = None
     ) -> None:
         """Delete a document from the collection."""
+        name = os.path.basename(name)
+        doc_list = []
+        dockey_list = []
         if name is not None:
-            doc = next((doc for doc in self.docs.values() if doc.docname == name), None)
-            if doc is None:
+            # doc = next((doc for doc in self.docs.values() if doc.docname.split(' ')[:-2] == name), None)
+            for doc in self.docs.values():
+                if name in doc.docname:
+                    doc_list.append(doc)
+                    dockey_list.append(doc.dockey)
+            if doc is []:
                 return
-            self.docnames.remove(doc.docname)
-            dockey = doc.dockey
-        if dockey is None:
+            for doc in doc_list:
+                self.docnames.remove(doc.docname)
+            # dockey = doc.dockey
+        if dockey is []:
             return
-        if self.doc_index is not None:
-            # Delete docs with the dockey attribute
-            self.doc_index.delete_by_attribute({'dockey':dockey})
-            # Delete all texts with the dockey attribute
-            if self.texts_index is not None:
-                self.texts_index.delete_by_attribute({'dockey':dockey})
 
-        del self.docs[dockey]
-        self.deleted_dockeys.add(dockey)
+        print(f"doc_list : \n{doc_list}\n")
+        print(f"dockey_list : \n{dockey_list}\n")
+        if self.doc_index is not None:
+            for dockey in dockey_list:
+                # Delete docs with the dockey attribute
+                self.doc_index.delete_by_attribute({'dockey':dockey})
+                del self.docs[dockey]
+                self.deleted_dockeys.add(dockey)
+            # Delete all texts with the dockey attribute
+        if self.texts_index is not None:
+            for doc in doc_list:
+                self.texts_index.delete_by_attribute({'name':doc.docname})
+
 
     async def adoc_match(
         self,
