@@ -1055,7 +1055,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = ""
+        # bib_str = ""
+        bib_str = []
         for i, c in enumerate(answer.contexts):
             name = c.text.name
             citation = c.text.doc.citation
@@ -1069,19 +1070,22 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     url = c.text.ext_path
                 else:
                     url = SHARE_POINT_URL + quote(c.text.ext_path)
-                bib_str += f"\n {i+1}. [{name}]({url})"
+                bib_str.append({"id":i+1,"ref":f"{name}({url})"})
+                # bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
-                    bib_str += f"\n {i+1}. {name}: {citation}"
+                    # bib_str += f"\n {i+1}. {name}: {citation}"
+                    bib_str.append({"id":i+1,"ref":f"{name}: {citation}"})
                 else:
-                    bib_str += f"\n {i+1}. {citation}"
+                    # bib_str += f"\n {i+1}. {citation}"
+                    bib_str.append({"id":i+1,"ref":f"{citation}"})
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
-        answer.references = bib_str
+        answer.references = {"references":bib_str}
 
         if self.prompts.post is not None:
             chain = make_chain(
