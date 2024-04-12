@@ -30,7 +30,7 @@ from pathlib import Path
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
 from .readers import read_doc
-from .types import Answer, CallbackFactory, Context, Doc, DocKey, PromptCollection, Text
+from .types import Answer, CallbackFactory, Context, Doc, DocKey, PromptCollection, Text, Faq_Text
 from .utils import (
     gather_with_concurrency,
     get_llm_name,
@@ -348,6 +348,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         texts: List[Text],
         doc: Doc,
         is_csv: Optional[bool] = None,
+        faq_texts: Optional[List[Faq_Text]] = [],
+        gi_faq: Optional[bool] = False,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -355,6 +357,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         """
         if doc.dockey in self.docs:
             return False
+
+        if len(faq_texts) != 0:
+            texts = faq_texts
 
         if len(texts) == 0:
             raise ValueError("No texts to add.")
@@ -366,7 +371,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
-            text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
+            if gi_faq:
+                text_embeddings = self.embeddings.embed_documents([t.question for t in texts])
+            else:
+                text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
             for i, t in enumerate(texts):
                 t.embeddings = text_embeddings[i]
         else:
@@ -379,17 +387,28 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.csv_text, x.embeddings), texts)
                     )
+                elif gi_faq:
+                    vec_store_text_and_embeddings = list(
+                        map(lambda x: (x.answer, x.embeddings), texts)
+                    )
                 else:
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.text, x.embeddings), texts)
                     )
 
                 vector_ids = [x.vector_id for x in texts]
-                self.texts_index.add_embeddings(  # type: ignore
-                    vec_store_text_and_embeddings,
-                    ids=vector_ids,
-                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
-                )
+                if gi_faq :
+                    self.texts_index.add_embeddings(  # type: ignore
+                        vec_store_text_and_embeddings,
+                        ids=vector_ids,
+                        metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
+                    )
+                else:
+                    self.texts_index.add_embeddings(  # type: ignore
+                        vec_store_text_and_embeddings,
+                        ids=vector_ids,
+                        metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
+                    )
 
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
@@ -406,23 +425,36 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self, name: Optional[str] = None, dockey: Optional[DocKey] = None
     ) -> None:
         """Delete a document from the collection."""
+        name = os.path.basename(name)
+        doc_list = []
+        dockey_list = []
         if name is not None:
-            doc = next((doc for doc in self.docs.values() if doc.docname == name), None)
-            if doc is None:
+            # doc = next((doc for doc in self.docs.values() if doc.docname.split(' ')[:-2] == name), None)
+            for doc in self.docs.values():
+                if name in doc.docname:
+                    doc_list.append(doc)
+                    dockey_list.append(doc.dockey)
+            if doc is []:
                 return
-            self.docnames.remove(doc.docname)
-            dockey = doc.dockey
-        if dockey is None:
+            for doc in doc_list:
+                self.docnames.remove(doc.docname)
+            # dockey = doc.dockey
+        if dockey is []:
             return
-        if self.doc_index is not None:
-            # Delete docs with the dockey attribute
-            self.doc_index.delete_by_attribute({'dockey':dockey})
-            # Delete all texts with the dockey attribute
-            if self.texts_index is not None:
-                self.texts_index.delete_by_attribute({'dockey':dockey})
 
-        del self.docs[dockey]
-        self.deleted_dockeys.add(dockey)
+        print(f"doc_list : \n{doc_list}\n")
+        print(f"dockey_list : \n{dockey_list}\n")
+        if self.doc_index is not None:
+            for dockey in dockey_list:
+                # Delete docs with the dockey attribute
+                self.doc_index.delete_by_attribute({'dockey':dockey})
+                del self.docs[dockey]
+                self.deleted_dockeys.add(dockey)
+            # Delete all texts with the dockey attribute
+        if self.texts_index is not None:
+            for doc in doc_list:
+                self.texts_index.delete_by_attribute({'name':doc.docname})
+
 
     async def adoc_match(
         self,
@@ -545,7 +577,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Optional[Tuple[str]] = None):
         category_filter = None
 
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
@@ -938,23 +970,43 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
-    async def aquery(
+    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category):
+        category_filter = self.category_filter_get(state_category, designation_category)
+        logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
+        
+        matches_with_score = self.texts_index.similarity_search_with_score(
+            answer.question, k=k, fetch_k=k,
+            where_filter=category_filter
+        )
+
+        answer.answer = matches_with_score[0][0].page_content
+        answer.faq_weaviate_score = matches_with_score[0][1]
+        answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
+        answer.faq_doc = matches_with_score[0][0].metadata['doc']
+        answer.references = matches_with_score[0][0].metadata['references']
+        answer.trace_id = trace_id
+        answer.faq_match_question = matches_with_score[0][0].metadata['question']
+
+        return answer
+
+
+    async def weaviate_call(
         self,
         query: str,
-        k: int = 10,
-        max_sources: int = 5,
-        length_prompt: str = "about 100 words",
-        marginal_relevance: bool = True,
+        k: Optional[int] = 10,
+        max_sources: Optional[int] = 5,
+        marginal_relevance: Optional[bool] = True,
         answer: Optional[Answer] = None,
+        length_prompt: Optional[str] = "about 100 words",
         key_filter: Optional[bool] = None,
-        get_callbacks: CallbackFactory = lambda x: None,
-        disable_answer: bool = False,
+        get_callbacks: Optional[CallbackFactory] = lambda x: None,
+        disable_answer: Optional[bool] = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        anchor_flag: Optional[bool] = False,
+        faq_dataset_flag: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -972,20 +1024,87 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            answer = await self.aget_evidence(
-                answer,
-                k=k,
-                max_sources=max_sources,
-                marginal_relevance=marginal_relevance,
-                get_callbacks=get_callbacks,
-                disable_answer=disable_answer,
-                reranker=reranker,
-                trace_id=trace_id,
-                state_category=state_category,
-                designation_category=designation_category,
-                topic=topic,
-            )
+            if faq_dataset_flag:
+                answer = await self.faq_aget_evidence(
+                    answer,
+                    k=k,
+                    trace_id=trace_id,
+                    state_category=state_category,
+                    designation_category=designation_category,
+                )
+            else:
+                answer = await self.aget_evidence(
+                    answer,
+                    k=k,
+                    max_sources=max_sources,
+                    marginal_relevance=marginal_relevance,
+                    get_callbacks=get_callbacks,
+                    disable_answer=disable_answer,
+                    reranker=reranker,
+                    trace_id=trace_id,
+                    state_category=state_category,
+                    designation_category=designation_category,
+                    topic=topic,
+                )
 
+        return answer
+
+    # async def aquery(
+    #     self,
+    #     query: str,
+    #     k: int = 10,
+    #     max_sources: int = 5,
+    #     length_prompt: str = "about 100 words",
+    #     marginal_relevance: bool = True,
+    #     answer: Optional[Answer] = None,
+    #     key_filter: Optional[bool] = None,
+    #     get_callbacks: CallbackFactory = lambda x: None,
+    #     disable_answer: bool = False,
+    #     reranker: Optional[str] = "None", # Replace this with enum
+    #     trace_id: Optional[str] = None,
+    #     state_category: Optional[Tuple[str]] = None,
+    #     designation_category: Optional[Tuple[str]] = None,
+    #     topic: Optional[Tuple[str]] = None,
+    #     anchor_flag: Optional[bool] = False,
+    # ) -> Answer:
+    #     if k < max_sources:
+    #         raise ValueError("k should be greater than max_sources")
+    #     if answer is None:
+    #         answer = Answer(question=query, answer_length=length_prompt)
+    #         answer.trace_id = trace_id
+
+    #     if len(answer.contexts) == 0:
+    #         # this is heuristic - k and len(docs) are not
+    #         # comparable - one is chunks and one is docs
+    #         if key_filter or (key_filter is None and len(self.docs) > k):
+    #             keys = await self.adoc_match(
+    #                 answer.question, get_callbacks=get_callbacks
+    #             )
+    #             if len(keys) > 0:
+    #                 answer.dockey_filter = keys
+    #         answer = await self.aget_evidence(
+    #             answer,
+    #             k=k,
+    #             max_sources=max_sources,
+    #             marginal_relevance=marginal_relevance,
+    #             get_callbacks=get_callbacks,
+    #             disable_answer=disable_answer,
+    #             reranker=reranker,
+    #             trace_id=trace_id,
+    #             state_category=state_category,
+    #             designation_category=designation_category,
+    #             topic=topic,
+    #         )
+
+    #     print(answer.question)
+    #     print(len(answer.contexts))
+
+    async def aquery(
+        self,
+        answer: Answer,
+        get_callbacks: CallbackFactory = lambda x: None,
+        trace_id: Optional[str] = None,
+    ) ->  Answer:
         if self.prompts.pre is not None:
             chain = make_chain(
                 self.prompts.pre,
@@ -1050,7 +1169,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
-
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
