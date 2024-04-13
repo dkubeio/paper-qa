@@ -990,7 +990,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return answer
 
 
-    async def weaviate_call(
+    async def vectorstore_call(
         self,
         query: str,
         k: Optional[int] = 10,
