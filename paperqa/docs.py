@@ -50,6 +50,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     docnames: Set[str] = set()
     texts_index: Optional[VectorStore] = None
     doc_index: Optional[VectorStore] = None
+    faq_index: Optional[VectorStore] = None
     llm: Union[str, BaseLanguageModel] = ChatOpenAI(
         temperature=0.1, model="gpt-3.5-turbo", client=None
     )
@@ -380,44 +381,52 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
 
-        if self.texts_index is not None:
+
+        vector_ids = [x.vector_id for x in texts]
+        if self.texts_index is not None and not gi_faq:
             try:
                 # TODO: Simplify - super weird
                 if is_csv == True:
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.csv_text, x.embeddings), texts)
                     )
-                elif gi_faq:
-                    vec_store_text_and_embeddings = list(
-                        map(lambda x: (x.answer, x.embeddings), texts)
-                    )
                 else:
                     vec_store_text_and_embeddings = list(
                         map(lambda x: (x.text, x.embeddings), texts)
                     )
 
-                vector_ids = [x.vector_id for x in texts]
-                if gi_faq :
-                    self.texts_index.add_embeddings(  # type: ignore
-                        vec_store_text_and_embeddings,
-                        ids=vector_ids,
-                        metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
-                    )
-                else:
-                    self.texts_index.add_embeddings(  # type: ignore
-                        vec_store_text_and_embeddings,
-                        ids=vector_ids,
-                        metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
-                    )
+                
+                self.texts_index.add_embeddings(  # type: ignore
+                    vec_store_text_and_embeddings,
+                    ids=vector_ids,
+                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
+                )
 
+                self.texts += texts
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
+
+        if self.faq_index is not None and gi_faq:
+            print(f"faq_index = {self.faq_index}")
+            try:
+                vec_store_text_and_embeddings = list(
+                    map(lambda x: (x.answer, x.embeddings), texts)
+                )
+                
+                self.faq_index.add_embeddings(
+                    vec_store_text_and_embeddings,
+                    ids=vector_ids,
+                    metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
+                )
+            
+                self.texts += texts
+            except AttributeError:
+                raise ValueError("Need a vector store that supports adding faq embeddings")
+
         if self.doc_index is not None:
             #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
             self.doc_index.add_texts([json.dumps(doc, default=vars)], metadatas=[doc.dict()])
         self.docs[doc.dockey] = doc
-        if self.texts_index is None:
-            self.texts += texts
         self.docnames.add(doc.docname)
         return True
 
