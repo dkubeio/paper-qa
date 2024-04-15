@@ -50,7 +50,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     docnames: Set[str] = set()
     texts_index: Optional[VectorStore] = None
     doc_index: Optional[VectorStore] = None
-    faq_index: Optional[VectorStore] = None
+    cache_index: Optional[VectorStore] = None
     llm: Union[str, BaseLanguageModel] = ChatOpenAI(
         temperature=0.1, model="gpt-3.5-turbo", client=None
     )
@@ -406,14 +406,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
 
-        if self.faq_index is not None and gi_faq:
-            print(f"faq_index = {self.faq_index}")
+        if self.cache_index is not None and gi_faq:
             try:
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.answer, x.embeddings), texts)
                 )
                 
-                self.faq_index.add_embeddings(
+                self.cache_index.add_embeddings(
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
