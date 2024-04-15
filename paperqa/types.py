@@ -67,7 +67,6 @@ class Faq_Text(BaseModel):
     embeddings: Optional[List[float]] = None
     date: Optional[str] = None
     feedback: Optional[str] = None
-    gi_faq: Optional[bool] = False
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
