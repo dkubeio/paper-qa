@@ -1063,12 +1063,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
             #if name_in_text(name, answer_text):
             #   bib[name] = citation
-            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
             if c.text.ext_path:
-                if c.text.doc_source.lower() == 'external':
-                    url = c.text.ext_path
-                else:
-                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+                url = c.text.ext_path
                 bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
