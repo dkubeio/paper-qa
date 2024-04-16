@@ -982,13 +982,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
         
-        matches_with_score = self.texts_index.similarity_search_with_score(
+        matches_with_score = self.cache_index.similarity_search_with_score(
             answer.question, k=k, fetch_k=k,
             where_filter=category_filter
         )
 
         answer.answer = matches_with_score[0][0].page_content
-        answer.faq_weaviate_score = matches_with_score[0][1]
+        answer.faq_vectorstore_score = matches_with_score[0][1]
         answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
         answer.faq_doc = matches_with_score[0][0].metadata['doc']
         answer.references = matches_with_score[0][0].metadata['references']
@@ -998,7 +998,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return answer
 
 
-    async def weaviate_call(
+    async def vectorstore_call(
         self,
         query: str,
         k: Optional[int] = 10,
