@@ -21,7 +21,8 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
 from langchain.text_splitter import TextSplitter
-from langchain.vectorstores import FAISS
+# from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 # from pydantic import BaseModel, validator
 from sentence_transformers import CrossEncoder
@@ -751,6 +752,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             rank = 1
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
+                # import pdb; pdb.set_trace()
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
@@ -1084,15 +1086,26 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory=self.memory_model,
                 system_prompt=self.prompts.system,
             )
-
+            print("[", end='')
             try:
                 logging.trace(f"trace_id:{trace_id} context:{answer.context}")
-                answer_text = await qa_chain.arun(
-                    context=answer.context,
-                    answer_length=answer.answer_length,
-                    question=answer.question,
-                    callbacks=callbacks,
+                # answer_text = await qa_chain.arun(
+                #     context=answer.context,
+                #     answer_length=answer.answer_length,
+                #     question=answer.question,
+                #     callbacks=callbacks,
+                # )
+                answer_text = await qa_chain.ainvoke(
+                    input={
+                        "context":answer.context,
+                        "answer_length":answer.answer_length,
+                        "question":answer.question,
+                    },
+                    config={
+                        "callbacks":callbacks,
+                    },
                 )
+
             except Exception as e:
                 import traceback
                 print(traceback.format_exc())
@@ -1120,22 +1133,22 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     url = c.text.ext_path
                 else:
                     url = SHARE_POINT_URL + quote(c.text.ext_path)
-                bib_str.append({"id":i+1,"ref":f"{name}({url})"})
+                bib_str.append({"rank":i+1,"ref":f"{name}", "url":f"{url}"})
                 # bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
                     # bib_str += f"\n {i+1}. {name}: {citation}"
-                    bib_str.append({"id":i+1,"ref":f"{name}: {citation}"})
+                    bib_str.append({"rank":i+1,"ref":f"{name}: {citation}"})
                 else:
                     # bib_str += f"\n {i+1}. {citation}"
-                    bib_str.append({"id":i+1,"ref":f"{citation}"})
+                    bib_str.append({"rank":i+1,"ref":f"{citation}"})
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
-        answer.references = {"references":bib_str}
+        answer.references = {"references":bib_str,"id":trace_id}
 
         if self.prompts.post is not None:
             chain = make_chain(
