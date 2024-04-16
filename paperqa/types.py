@@ -164,7 +164,7 @@ class Answer(BaseModel):
     cost: Optional[float] = None
     token_counts: Optional[Dict[str, List[int]]] = None
     trace_id: Optional[str] = None
-    faq_weaviate_score: Optional[float] = None
+    faq_vectorstore_score: Optional[float] = None
     faq_vector_id: Optional[str] = ''
     faq_doc: Optional[Doc] = None
     faq_match_question: Optional[str]=None
