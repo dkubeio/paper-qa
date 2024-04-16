@@ -55,6 +55,7 @@ qa_prompt = PromptTemplate(
     "via valid citation markers at the end of sentences, like (Example2012). \n"
     "Include confidence score of the generated answer on the scale of 1 to 10 \n"
     "Do not explain confidence score. \n"
+    "Provide the output in given response_format. \n"
     # "Your response should only be in JSON. No text responses. \n"
     # "Strictly follow the following JSON format for the answer. \n"
     # "For eg. \n"
@@ -97,9 +98,14 @@ default_system_prompt = (
     "If there are ambiguous terms or acronyms, first define them. "
 )
 '''
+# default_system_prompt = (
+#     "You are a Retrieval Augmented Generation chatbot and helpful assistant designed to output JSON. "
+#     "Think step by step and answer in a direct and concise tone. "
+# )
+
+
 default_system_prompt = (
-    "You are a Retrieval Augmented Generation chatbot and helpful assistant designed to output JSON. "
-    "Think step by step and answer in a direct and concise tone. "
+    "You are a helpful assistant designed to output JSON."
 )
 
 followup_system_prompt = PromptTemplate(
