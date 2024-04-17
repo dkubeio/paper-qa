@@ -13,6 +13,7 @@ from pydantic.functional_validators import field_validator
 from .prompts import (
     citation_prompt,
     default_system_prompt,
+    default_json_system_prompt,
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
@@ -66,6 +67,7 @@ class PromptCollection(BaseModel):
     pre: Optional[PromptTemplate] = None
     post: Optional[PromptTemplate] = None
     system: str = default_system_prompt
+    json_system: str = default_json_system_prompt
     skip_summary: bool = False
 
     @field_validator("summary")
