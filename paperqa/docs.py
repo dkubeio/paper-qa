@@ -349,8 +349,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         texts: List[Text],
         doc: Doc,
         is_csv: Optional[bool] = None,
-        faq_texts: Optional[List[Faq_Text]] = [],
-        gi_faq: Optional[bool] = False,
+        sllm_qna: Optional[bool] = False,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -358,9 +357,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         """
         if doc.dockey in self.docs:
             return False
-
-        if len(faq_texts) != 0:
-            texts = faq_texts
 
         if len(texts) == 0:
             raise ValueError("No texts to add.")
@@ -372,7 +368,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
-            if gi_faq:
+            if sllm_qna:
                 text_embeddings = self.embeddings.embed_documents([t.question for t in texts])
             else:
                 text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
@@ -383,7 +379,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         vector_ids = [x.vector_id for x in texts]
-        if self.texts_index is not None and not gi_faq:
+        if self.texts_index is not None and not sllm_qna:
             try:
                 # TODO: Simplify - super weird
                 if is_csv == True:
@@ -406,7 +402,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
 
-        if self.cache_index is not None and gi_faq:
+        if self.cache_index is not None and sllm_qna:
             try:
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.answer, x.embeddings), texts)
@@ -450,15 +446,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if dockey is []:
             return
 
-        print(f"doc_list : \n{doc_list}\n")
-        print(f"dockey_list : \n{dockey_list}\n")
         if self.doc_index is not None:
             for dockey in dockey_list:
                 # Delete docs with the dockey attribute
                 self.doc_index.delete_by_attribute({'dockey':dockey})
                 del self.docs[dockey]
                 self.deleted_dockeys.add(dockey)
-            # Delete all texts with the dockey attribute
+            # Delete all texts with the name attribute
         if self.texts_index is not None:
             for doc in doc_list:
                 self.texts_index.delete_by_attribute({'name':doc.docname})
@@ -755,14 +749,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
-        # ok now filter
-        #if answer.dockey_filter is not None:
-        #    matches = [
-        #        m
-        #        for m in matches
-        #        if m.metadata["doc"]["dockey"] in answer.dockey_filter
-        #    ]
-
         # check if it is deleted
         matches = [
             m
@@ -1057,55 +1043,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
-    # async def aquery(
-    #     self,
-    #     query: str,
-    #     k: int = 10,
-    #     max_sources: int = 5,
-    #     length_prompt: str = "about 100 words",
-    #     marginal_relevance: bool = True,
-    #     answer: Optional[Answer] = None,
-    #     key_filter: Optional[bool] = None,
-    #     get_callbacks: CallbackFactory = lambda x: None,
-    #     disable_answer: bool = False,
-    #     reranker: Optional[str] = "None", # Replace this with enum
-    #     trace_id: Optional[str] = None,
-    #     state_category: Optional[Tuple[str]] = None,
-    #     designation_category: Optional[Tuple[str]] = None,
-    #     topic: Optional[Tuple[str]] = None,
-    #     anchor_flag: Optional[bool] = False,
-    # ) -> Answer:
-    #     if k < max_sources:
-    #         raise ValueError("k should be greater than max_sources")
-    #     if answer is None:
-    #         answer = Answer(question=query, answer_length=length_prompt)
-    #         answer.trace_id = trace_id
-
-    #     if len(answer.contexts) == 0:
-    #         # this is heuristic - k and len(docs) are not
-    #         # comparable - one is chunks and one is docs
-    #         if key_filter or (key_filter is None and len(self.docs) > k):
-    #             keys = await self.adoc_match(
-    #                 answer.question, get_callbacks=get_callbacks
-    #             )
-    #             if len(keys) > 0:
-    #                 answer.dockey_filter = keys
-    #         answer = await self.aget_evidence(
-    #             answer,
-    #             k=k,
-    #             max_sources=max_sources,
-    #             marginal_relevance=marginal_relevance,
-    #             get_callbacks=get_callbacks,
-    #             disable_answer=disable_answer,
-    #             reranker=reranker,
-    #             trace_id=trace_id,
-    #             state_category=state_category,
-    #             designation_category=designation_category,
-    #             topic=topic,
-    #         )
-
-    #     print(answer.question)
-    #     print(len(answer.contexts))
 
     async def aquery(
         self,
