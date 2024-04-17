@@ -1004,6 +1004,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
+        stream_json: Optional[bool] = False,
     ) -> Answer:
         self._check_is_set()
         if k < max_sources:
@@ -1080,13 +1081,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.question = followup_question
                 logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
 
+            system_prompt = self.prompts.system
+            js_format = ''
+            if stream_json:
+                js_format = json.dumps({"answer":[],"confidence_score":[],"sources":[]})
+                json_req = f"\n(Give answer for question asked above in following JSON format {js_format}"
+                system_prompt = self.prompts.json_system
+                print("[", end='')
+
             qa_chain = make_chain(
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=system_prompt,
             )
-            print("[", end='')
+            
             try:
                 logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 # answer_text = await qa_chain.arun(
@@ -1100,6 +1109,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         "context":answer.context,
                         "answer_length":answer.answer_length,
                         "question":answer.question,
+                        "json_format":js_format,
                     },
                     config={
                         "callbacks":callbacks,
@@ -1118,8 +1128,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        # bib_str = ""
-        bib_str = []
+        bib_str = [] if stream_json else ""
         for i, c in enumerate(answer.contexts):
             name = c.text.name
             citation = c.text.doc.citation
@@ -1133,22 +1142,28 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     url = c.text.ext_path
                 else:
                     url = SHARE_POINT_URL + quote(c.text.ext_path)
-                bib_str.append({"rank":i+1,"ref":f"{name}", "url":f"{url}"})
-                # bib_str += f"\n {i+1}. [{name}]({url})"
+                if stream_json:
+                    bib_str.append({"rank":i+1,"ref":f"{name}", "url":f"{url}"})
+                else: 
+                    bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
-                    # bib_str += f"\n {i+1}. {name}: {citation}"
-                    bib_str.append({"rank":i+1,"ref":f"{name}: {citation}"})
+                    if stream_json:
+                        bib_str.append({"rank":i+1,"ref":f"{name}: {citation}"})
+                    else: 
+                        bib_str += f"\n {i+1}. {name}: {citation}"
                 else:
-                    # bib_str += f"\n {i+1}. {citation}"
-                    bib_str.append({"rank":i+1,"ref":f"{citation}"})
+                    if stream_json: 
+                        bib_str.append({"rank":i+1,"ref":f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {citation}"
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
-        answer.references = {"references":bib_str,"id":trace_id}
+        answer.references = {"references":bib_str,"id":trace_id} if stream_json else bib_str
 
         if self.prompts.post is not None:
             chain = make_chain(
