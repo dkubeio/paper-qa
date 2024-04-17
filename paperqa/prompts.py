@@ -46,7 +46,7 @@ summary_prompt = PromptTemplate(
     "Output:\n\n",
 )
 qa_prompt = PromptTemplate(
-    input_variables=["context", "answer_length", "question"],
+    input_variables=["context", "answer_length", "question", "json_format"],
     template="Write an answer in {answer_length} "
     "for the question below based on the provided context. "
     "If the context provides insufficient information and the question cannot be directly answered, "
@@ -65,7 +65,7 @@ qa_prompt = PromptTemplate(
     
     # "Do not add any qualifiers or any explaination of confidentiality score or answer. \n"
     "Context (with relevance scores):\n {context}\n"
-    "Question: {question}\n"
+    "Question: {question}{json_format}\n"
     "Output: \n"
 )
 
@@ -98,14 +98,14 @@ default_system_prompt = (
     "If there are ambiguous terms or acronyms, first define them. "
 )
 '''
-# default_system_prompt = (
-#     "You are a Retrieval Augmented Generation chatbot and helpful assistant designed to output JSON. "
-#     "Think step by step and answer in a direct and concise tone. "
-# )
-
-
 default_system_prompt = (
-    "You are a helpful assistant designed to output JSON."
+    "You are a Retrieval Augmented Generation chatbot. "
+    "Think step by step and answer in a direct and concise tone. "
+)
+
+
+default_json_system_prompt = (
+    "You are a helpful assistant designed to output JSON. Your response should only be in JSON. No text responses"
 )
 
 followup_system_prompt = PromptTemplate(
