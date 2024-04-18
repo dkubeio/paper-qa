@@ -1084,7 +1084,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             system_prompt = self.prompts.system
             js_format = ''
             if stream_json:
-                js_format = json.dumps({"answer":[],"confidence_score":'',"sources":[]})
+                js_format = json.dumps({"answer":[],"confidence_score":[],"sources":[]})
                 json_req = f"\n(Give answer for question asked above in following JSON format {js_format}"
                 system_prompt = self.prompts.json_system
 
