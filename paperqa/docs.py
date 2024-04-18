@@ -1087,7 +1087,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 js_format = json.dumps({"answer":[],"confidence_score":[],"sources":[]})
                 json_req = f"\n(Give answer for question asked above in following JSON format {js_format}"
                 system_prompt = self.prompts.json_system
-                print("[", end='')
 
             qa_chain = make_chain(
                 self.prompts.qa,
