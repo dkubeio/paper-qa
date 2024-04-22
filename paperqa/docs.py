@@ -669,6 +669,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
+        follow_on_questions: Optional[List[str]] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -720,14 +721,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
         follow_on_questions = []
-        idx = 0
-        while len(set(follow_on_questions)) < max_sources:
-            if matches[idx].metadata['follow_on_question']:
-                embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-                if answer.question not in embed_text and embed_text not in follow_on_questions:
-                    follow_on_questions.append(embed_text)
+        if follow_on_questions:
+            idx = 0
+            while len(set(follow_on_questions)) < max_sources:
+                if matches[idx].metadata['follow_on_question']:
+                    embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+                    if answer.question not in embed_text and embed_text not in follow_on_questions:
+                        follow_on_questions.append(embed_text)
 
-            idx += 1
+                idx += 1
 
         answer.follow_on_questions = follow_on_questions
 
@@ -971,6 +973,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
+        follow_on_questions = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1000,6 +1003,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 state_category=state_category,
                 designation_category=designation_category,
                 topic=topic,
+                follow_on_questions=follow_on_questions,
             )
 
         if self.prompts.pre is not None:
