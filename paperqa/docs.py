@@ -393,13 +393,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
+
         if self.doc_index is not None:
             #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
-            self.doc_index.add_texts([json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+            self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+
         self.docs[doc.dockey] = doc
         if self.texts_index is None:
             self.texts += texts
+
         self.docnames.add(doc.docname)
+
         return True
 
     def delete(
@@ -545,7 +549,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str],
+                            follow_on_question: bool = None):
         category_filter = None
 
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
@@ -649,6 +654,48 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
+    def get_follow_on_questions(self,
+                                answer: Answer,
+                                k: int = 10,  # Number of vectors to retrieve
+                                max_sources: int = 5,  # Number of scored contexts to use
+                                trace_id: Optional[str] = None,
+                                state_category: Optional[Tuple[str]] = None,
+                                designation_category: Optional[Tuple[str]] = None,
+                                topic: Optional[Tuple[str]] = None) -> List[str]:
+        start_time = datetime.now()
+        category_filter = self.category_filter_get(state_category, designation_category,
+                                                   topic, follow_on_question=True)
+        logging.trace(f"trace_id:{trace_id} category_filter follow on questions:{category_filter}")
+
+        matches_with_score = self.texts_index.similarity_search_with_score(
+            answer.question, k=k, fetch_k=5 * k,
+            where_filter=category_filter
+        )
+        logging.trace(f"length of matches with score: {len(matches_with_score)}")
+        end_time = datetime.now()
+        logging.trace(
+            f"trace_id:{trace_id} follow on question vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+
+        # matches_with_score is a list of tuples (doc, score)
+        # fetch all the scores in a list, sort them in descending order
+        # scores = sorted([m[1] for m in matches_with_score], reverse=True)
+        matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+        matches = [match_with_score[0] for match_with_score in matches_with_score]
+        # matches, scores = self.filter_unique_matches(matches, scores)
+
+        # print(f"matches length len: {len(matches)}")
+
+        follow_on_questions = []
+        for idx in range(min([max_sources, len(matches)])):
+
+            embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+
+            # make sure the question does not match exactly
+            if answer.question not in embed_text:
+                follow_on_questions.append(embed_text)
+
+        return follow_on_questions
+
     async def aget_evidence(
         self,
         answer: Answer,
@@ -683,8 +730,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-
-            category_filter = self.category_filter_get(state_category, designation_category, topic)
+            category_filter = self.category_filter_get(state_category, designation_category,
+                                                       topic, follow_on_question=False)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -704,7 +751,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches, scores = self.filter_unique_matches(matches, scores)
 
             rank = 1
-            for m, score in zip(matches[:max_sources], scores[:max_sources]):
+            for m, score in zip(matches, scores):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
@@ -714,6 +761,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for m in matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
+
+        follow_on_questions = []
+        idx = 0
+        while len(set(follow_on_questions)) < max_sources:
+            embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+            if answer.question not in embed_text and embed_text not in follow_on_questions:
+                follow_on_questions.append(embed_text)
+
+            idx += 1
+
+        answer.follow_on_questions = follow_on_questions
 
         # ok now filter
         #if answer.dockey_filter is not None:
@@ -741,30 +799,30 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
-        def get_next_context(source):
-            doc_vector_ids = source.metadata['doc_vector_ids']
-            parent_chunk = ''
-            vid = ''
-            if len(doc_vector_ids) > 3:
-                sid = source.metadata['_additional']['id']
-                sid_index = doc_vector_ids.index(sid)
-
-                if not sid_index:
-                    vid = doc_vector_ids[sid_index + 3]
-                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
-                    vid = doc_vector_ids[sid_index + 2]
-                
-                if vid != '':
-                    data_object = self.texts_index._client.data_object.get_by_id(
-                        vid,
-                        class_name=self.texts_index._index_name,
-                    )
-
-                    parent_chunk = data_object['properties']['parent_chunk']
-
-            return parent_chunk
-
-        next_contexts = [get_next_context(m) for m in matches]
+        # def get_next_context(source):
+        #     doc_vector_ids = source.metadata['doc_vector_ids']
+        #     parent_chunk = ''
+        #     vid = ''
+        #     if len(doc_vector_ids) > 3:
+        #         sid = source.metadata['_additional']['id']
+        #         sid_index = doc_vector_ids.index(sid)
+        #
+        #         if not sid_index:
+        #             vid = doc_vector_ids[sid_index + 3]
+        #         elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+        #             vid = doc_vector_ids[sid_index + 2]
+        #
+        #         if vid != '':
+        #             data_object = self.texts_index._client.data_object.get_by_id(
+        #                 vid,
+        #                 class_name=self.texts_index._index_name,
+        #             )
+        #
+        #             parent_chunk = data_object['properties']['parent_chunk']
+        #
+        #     return parent_chunk
+        #
+        # next_contexts = [get_next_context(m) for m in matches]
 
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -820,16 +878,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if disable_answer:
             contexts = [
                 Context(
-                    context=match.page_content + next_contexts[idx],
+                    context=match.page_content,  # + next_contexts[idx],
                     score=10,
                     weaviate_score=scores[idx],
                     text=Text(
-                        text=match.page_content + next_contexts[idx],
+                        text=match.page_content,  # + next_contexts[idx],
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
-                        doc_source = match.metadata["doc_source"][0],
+                        doc_source=match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
                 )
