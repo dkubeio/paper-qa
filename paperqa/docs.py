@@ -549,8 +549,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str],
-                            follow_on_question: bool = None):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
         category_filter = None
 
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
@@ -654,47 +653,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
-    def get_follow_on_questions(self,
-                                answer: Answer,
-                                k: int = 10,  # Number of vectors to retrieve
-                                max_sources: int = 5,  # Number of scored contexts to use
-                                trace_id: Optional[str] = None,
-                                state_category: Optional[Tuple[str]] = None,
-                                designation_category: Optional[Tuple[str]] = None,
-                                topic: Optional[Tuple[str]] = None) -> List[str]:
-        start_time = datetime.now()
-        category_filter = self.category_filter_get(state_category, designation_category,
-                                                   topic, follow_on_question=True)
-        logging.trace(f"trace_id:{trace_id} category_filter follow on questions:{category_filter}")
-
-        matches_with_score = self.texts_index.similarity_search_with_score(
-            answer.question, k=k, fetch_k=5 * k,
-            where_filter=category_filter
-        )
-        logging.trace(f"length of matches with score: {len(matches_with_score)}")
-        end_time = datetime.now()
-        logging.trace(
-            f"trace_id:{trace_id} follow on question vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
-
-        # matches_with_score is a list of tuples (doc, score)
-        # fetch all the scores in a list, sort them in descending order
-        # scores = sorted([m[1] for m in matches_with_score], reverse=True)
-        matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-        matches = [match_with_score[0] for match_with_score in matches_with_score]
-        # matches, scores = self.filter_unique_matches(matches, scores)
-
-        # print(f"matches length len: {len(matches)}")
-
-        follow_on_questions = []
-        for idx in range(min([max_sources, len(matches)])):
-
-            embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-
-            # make sure the question does not match exactly
-            if answer.question not in embed_text:
-                follow_on_questions.append(embed_text)
-
-        return follow_on_questions
 
     async def aget_evidence(
         self,
@@ -730,8 +688,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            category_filter = self.category_filter_get(state_category, designation_category,
-                                                       topic, follow_on_question=False)
+            category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -765,9 +722,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         follow_on_questions = []
         idx = 0
         while len(set(follow_on_questions)) < max_sources:
-            embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-            if answer.question not in embed_text and embed_text not in follow_on_questions:
-                follow_on_questions.append(embed_text)
+            if matches[idx].metadata['follow_on_question']:
+                embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+                if answer.question not in embed_text and embed_text not in follow_on_questions:
+                    follow_on_questions.append(embed_text)
 
             idx += 1
 
