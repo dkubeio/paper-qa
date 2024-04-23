@@ -974,7 +974,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
-        stream_json: Optionale[bool] = False,
+        stream_json: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1090,7 +1090,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if c.text.doc_source.lower() == 'external':
                     url = c.text.ext_path
                 else:
-                    url = SHARE_POINT_URL + quote(c.text_ext_path)
+                    url = SHARE_POINT_URL + quote(c.text.ext_path)
 
                 if stream_json:
                     bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
