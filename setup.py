@@ -19,7 +19,7 @@ setup(
     install_requires=[
         "pypdf",
         "pymupdf",
-        "pydantic<2",
+        "pydantic>2",
         # "langchain>=0.0.198",
         # "openai >= 0.27.8",
         "langchain>=0.0.303",
@@ -27,7 +27,7 @@ setup(
         "faiss-cpu",
         "PyCryptodome",
         "html2text",
-        "tiktoken>=0.4.0",
+        "tiktoken>0.4.0",
     ],
     test_suite="tests",
     long_description=long_description,
