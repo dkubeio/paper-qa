@@ -720,18 +720,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
-        questions = []
+        follow_on_questions = []
         if follow_on_questions:
             idx = 0
-            while len(set(questions)) < max_sources:
+            while len(set(follow_on_questions)) < max_sources:
                 if matches[idx].metadata['follow_on_question']:
                     embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-                    if answer.question not in embed_text and embed_text not in questions:
-                        questions.append(embed_text)
+                    if answer.question not in embed_text and embed_text not in follow_on_questions:
+                        follow_on_questions.append(embed_text)
 
                 idx += 1
 
-        answer.follow_on_questions = questions
+        answer.follow_on_questions = follow_on_questions
 
         # ok now filter
         #if answer.dockey_filter is not None:
@@ -974,6 +974,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         topic: Optional[Tuple[str]] = None,
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
+        stream_json: Optionale[bool] = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1075,29 +1076,44 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = ""
+        bib_str = [] if stream_json else ""
         for i, c in enumerate(answer.contexts):
             name = c.text.name
             citation = c.text.doc.citation
 
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
             #if name_in_text(name, answer_text):
-            #   bib[name] = citation
+            #   bib[name] = citationi
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+
             if c.text.ext_path:
-                url = c.text.ext_path
-                bib_str += f"\n {i+1}. [{name}]({url})"
+                if c.text.doc_source.lower() == 'external':
+                    url = c.text.ext_path
+                else:
+                    url = SHARE_POINT_URL + quote(c.text_ext_path)
+
+                if stream_json:
+                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+                else:
+                    bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
-                    bib_str += f"\n {i+1}. {name}: {citation}"
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {name}: {citation}"
                 else:
-                    bib_str += f"\n {i+1}. {citation}"
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {citation}"
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
-        answer.references = bib_str
+        answer.references = {"references":bib_str, "id":trace_id} if stream_json else bib_str
 
         if self.prompts.post is not None:
             chain = make_chain(
