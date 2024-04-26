@@ -757,7 +757,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             rank = 1
             for m, score in zip(matches[:max_sources], scores[:max_sources]):
-                # import pdb; pdb.set_trace()
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
@@ -1156,14 +1155,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             #if name_in_text(name, answer_text):
             #   bib[name] = citation
             if c.text.ext_path:
-                if c.text.doc_source.lower() == 'external':
-                    url = c.text.ext_path
-                else:
-                    url = SHARE_POINT_URL + quote(c.text.ext_path)
-                if stream_json:
-                    bib_str.append({"rank":i+1,"ref":f"{name}", "url":f"{url}"})
-                else: 
-                    bib_str += f"\n {i+1}. [{name}]({url})"
+                url = c.text.ext_path
+                bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
                     if stream_json:
