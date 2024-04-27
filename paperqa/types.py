@@ -42,7 +42,7 @@ class Text(BaseModel):
     reranker_vector_id: Optional[str] = None
     base_vector_id: Optional[str] = None
     embed_text: Optional[str] = None
-    relevant_vectors: Optional[List[str]] = None
+    relevant_vectors: Optional[List[str]] = []
     csv_text: Optional[str] = None
     doc_vector_ids: Optional[List[str]] = None
     page_text: Optional[str] = None
@@ -54,6 +54,7 @@ class Text(BaseModel):
     topic: Optional[List[str]] = None
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
+    follow_on_question: Optional[bool] = None
 
 class Faq_Text(BaseModel):
     question: str
@@ -168,6 +169,7 @@ class Answer(BaseModel):
     faq_vector_id: Optional[str] = ''
     faq_doc: Optional[Doc] = None
     faq_match_question: Optional[str]=None
+    follow_on_questions: Optional[List[str]] = None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
