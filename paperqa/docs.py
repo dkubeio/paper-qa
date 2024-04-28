@@ -693,17 +693,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return new_matches, new_scores
 
 
-    def get_followon_questions(self,matches, max_sources):
+    def get_followon_questions(self,answer, matches, max_sources):
         questions = []
         idx = 0
-        while len(set(questions)) < max_sources:
+        while len(set(questions)) < max_sources and idx < len(matches):
             if matches[idx].metadata['follow_on_question']:
                 embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
                 if answer.question not in embed_text and embed_text not in questions:
                     questions.append(embed_text)
 
             idx += 1
-
+        
         return questions
 
 
@@ -772,7 +772,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         questions = []
         if follow_on_questions:
-            questions = get_followon_questions(matches, max_sources)
+            questions = self.get_followon_questions(answer, matches, max_sources)
 
         answer.follow_on_questions = questions
 
@@ -1000,7 +1000,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         )
 
 
-    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions):
+    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
         
@@ -1031,7 +1031,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if isinstance(m.metadata["doc"], str):
                     m.metadata["doc"] = json.loads(m.metadata["doc"])
             
-            questions = get_followon_questions(matches, max_sources)
+            questions = self.get_followon_questions(answer, matches, max_sources)
 
         answer.follow_on_questions = questions
 
@@ -1081,8 +1081,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     trace_id=trace_id,
                     state_category=state_category,
                     designation_category=designation_category,
-                    topc=topic,
+                    topic=topic,
                     follow_on_questions=follow_on_questions,
+                    max_sources=max_sources
                 )
             else:
                 answer = await self.aget_evidence(
