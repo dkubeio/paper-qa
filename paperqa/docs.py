@@ -999,8 +999,30 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
+    def get_reference_dict(self, references):
+        dict_ = {"references": []}
+        i = 1
+        ref = ''
+        url = ''
+        while(re.findall(rf'{i}. .*', references)) != []:
+            d = {}
+            ref_str = re.findall(rf'{i}. .*', references)[0][3:]
+            if ref_str.startswith('['):
+                ref = re.findall(r'\[.*\]', ref_str)[0][1:][:-1]
+                url = re.findall(r'\(.*\)', ref_str)[0][1:][:-1]
+            else:
+                ref = ref_str
+                url = ref_str
+            d["rank"] = i
+            d["ref"] = ref
+            d["url"] = url
+            dict_["references"].append(d)
+            i = i + 1
 
-    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources):
+        return dict_
+
+
+    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
         
@@ -1013,7 +1035,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.faq_vectorstore_score = matches_with_score[0][1]
         answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
         answer.faq_doc = matches_with_score[0][0].metadata['doc']
-        answer.references = matches_with_score[0][0].metadata['references']
+        if stream_json:
+            answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
+        else:
+            answer.references = matches_with_score[0][0].metadata['references']
         answer.trace_id = trace_id
         answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
@@ -1084,7 +1109,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     designation_category=designation_category,
                     topic=topic,
                     follow_on_questions=follow_on_questions,
-                    max_sources=max_sources
+                    max_sources=max_sources,
+                    stream_json=stream_json,
                 )
             else:
                 answer = await self.aget_evidence(
@@ -1110,6 +1136,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer: Answer,
         get_callbacks: CallbackFactory = lambda x: None,
         trace_id: Optional[str] = None,
+        stream_json: Optional[bool] = False,
     ) ->  Answer:
         if self.prompts.pre is not None:
             chain = make_chain(
