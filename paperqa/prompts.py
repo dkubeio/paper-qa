@@ -53,6 +53,8 @@ qa_prompt = PromptTemplate(
     'reply "I cannot answer". '
     "For each part of your answer, indicate which sources most support it "
     "via valid citation markers at the end of sentences, like (Example2012). \n"
+    "Include confidence score of the generated answer on the scale of 1 to 10 \n"
+    "Do not explain Confidence score. \n"
     "Context (with relevance scores):\n {context}\n"
     "Question: {question}\n"
     "Answer: ",

@@ -56,6 +56,18 @@ class Text(BaseModel):
     doc_source: Optional[str] = None
     follow_on_question: Optional[bool] = None
 
+class Faq_Text(BaseModel):
+    question: str
+    answer: str
+    trace_id: str
+    doc: Doc
+    vector_id: str
+    references: str 
+    state_category: List[str]
+    designation_category: List[str]
+    embeddings: Optional[List[float]] = None
+    date: Optional[str] = None
+    feedback: Optional[str] = None
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
@@ -153,8 +165,11 @@ class Answer(BaseModel):
     cost: Optional[float] = None
     token_counts: Optional[Dict[str, List[int]]] = None
     trace_id: Optional[str] = None
+    faq_vectorstore_score: Optional[float] = None
+    faq_vector_id: Optional[str] = ''
+    faq_doc: Optional[Doc] = None
+    faq_match_question: Optional[str]=None
     follow_on_questions: Optional[List[str]] = None
-
 
     def __str__(self) -> str:
         """Return the answer as a string."""

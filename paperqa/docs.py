@@ -30,7 +30,7 @@ from pathlib import Path
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
 from .readers import read_doc
-from .types import Answer, CallbackFactory, Context, Doc, DocKey, PromptCollection, Text
+from .types import Answer, CallbackFactory, Context, Doc, DocKey, PromptCollection, Text, Faq_Text
 from .utils import (
     gather_with_concurrency,
     get_llm_name,
@@ -50,6 +50,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     docnames: Set[str] = set()
     texts_index: Optional[VectorStore] = None
     doc_index: Optional[VectorStore] = None
+    cache_index: Optional[VectorStore] = None
     llm: Union[str, BaseLanguageModel] = ChatOpenAI(
         temperature=0.1, model="gpt-3.5-turbo", client=None
     )
@@ -348,6 +349,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         texts: List[Text],
         doc: Doc,
         is_csv: Optional[bool] = None,
+        sllm_qna: Optional[bool] = False,
     ) -> bool:
         """Add chunked texts to the collection. This is useful if you have already chunked the texts yourself.
 
@@ -366,13 +368,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
-            text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
+            if sllm_qna:
+                text_embeddings = self.embeddings.embed_documents([t.question for t in texts])
+            else:
+                text_embeddings = self.embeddings.embed_documents([t.text for t in texts])
             for i, t in enumerate(texts):
                 t.embeddings = text_embeddings[i]
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
 
-        if self.texts_index is not None:
+
+        vector_ids = [x.vector_id for x in texts]
+        if self.texts_index is not None and not sllm_qna:
             try:
                 # TODO: Simplify - super weird
                 if is_csv == True:
@@ -384,15 +391,32 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         map(lambda x: (x.text, x.embeddings), texts)
                     )
 
-                vector_ids = [x.vector_id for x in texts]
+                
                 self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
 
+                self.texts += texts
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
+
+        if self.cache_index is not None and sllm_qna:
+            try:
+                vec_store_text_and_embeddings = list(
+                    map(lambda x: (x.answer, x.embeddings), texts)
+                )
+                
+                self.cache_index.add_embeddings(
+                    vec_store_text_and_embeddings,
+                    ids=vector_ids,
+                    metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
+                )
+            
+                self.texts += texts
+            except AttributeError:
+                raise ValueError("Need a vector store that supports adding faq embeddings")
 
         if self.doc_index is not None:
             #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
@@ -410,23 +434,34 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self, name: Optional[str] = None, dockey: Optional[DocKey] = None
     ) -> None:
         """Delete a document from the collection."""
+        name = os.path.basename(name)
+        doc_list = []
+        dockey_list = []
         if name is not None:
-            doc = next((doc for doc in self.docs.values() if doc.docname == name), None)
-            if doc is None:
+            # doc = next((doc for doc in self.docs.values() if doc.docname.split(' ')[:-2] == name), None)
+            for doc in self.docs.values():
+                if name in doc.docname:
+                    doc_list.append(doc)
+                    dockey_list.append(doc.dockey)
+            if doc is []:
                 return
-            self.docnames.remove(doc.docname)
-            dockey = doc.dockey
-        if dockey is None:
+            for doc in doc_list:
+                self.docnames.remove(doc.docname)
+            # dockey = doc.dockey
+        if dockey is []:
             return
-        if self.doc_index is not None:
-            # Delete docs with the dockey attribute
-            self.doc_index.delete_by_attribute({'dockey':dockey})
-            # Delete all texts with the dockey attribute
-            if self.texts_index is not None:
-                self.texts_index.delete_by_attribute({'dockey':dockey})
 
-        del self.docs[dockey]
-        self.deleted_dockeys.add(dockey)
+        if self.doc_index is not None:
+            for dockey in dockey_list:
+                # Delete docs with the dockey attribute
+                self.doc_index.delete_by_attribute({'dockey':dockey})
+                del self.docs[dockey]
+                self.deleted_dockeys.add(dockey)
+            # Delete all texts with the name attribute
+        if self.texts_index is not None:
+            for doc in doc_list:
+                self.texts_index.delete_by_attribute({'name':doc.docname})
+
 
     async def adoc_match(
         self,
@@ -549,7 +584,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.memory_model is not None:
             self.memory_model.clear()
 
-    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Tuple[str]):
+    def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Optional[Tuple[str]] = None):
         category_filter = None
 
         logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
@@ -638,7 +673,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
-    def filter_unique_matches(self, matches, scores):
+    def filter_unique_matches(self, matches_with_score):
+        scores = sorted([m[1] for m in matches_with_score], reverse=True)
+        matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+        matches = [match_with_score[0] for match_with_score in matches_with_score]
+        
         new_matches = []
         new_scores = []
         unique_set = set()
@@ -652,6 +691,20 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 unique_set.add(relevant_vectors)
 
         return new_matches, new_scores
+
+
+    def get_followon_questions(self,answer, matches, max_sources):
+        questions = []
+        idx = 0
+        while len(set(questions)) < max_sources and idx < len(matches):
+            if matches[idx].metadata['follow_on_question']:
+                embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
+                if answer.question not in embed_text and embed_text not in questions:
+                    questions.append(embed_text)
+
+            idx += 1
+        
+        return questions
 
 
     async def aget_evidence(
@@ -702,11 +755,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
-            scores = sorted([m[1] for m in matches_with_score], reverse=True)
-            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
-            matches = [match_with_score[0] for match_with_score in matches_with_score]
 
-            matches, scores = self.filter_unique_matches(matches, scores)
+            matches, scores = self.filter_unique_matches(matches_with_score)
 
             rank = 1
             for m, score in zip(matches, scores):
@@ -722,14 +772,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         questions = []
         if follow_on_questions:
-            idx = 0
-            while len(set(questions)) < max_sources:
-                if matches[idx].metadata['follow_on_question']:
-                    embed_text = matches[idx].metadata['embed_text'][:-5] + "?"
-                    if answer.question not in embed_text and embed_text not in questions:
-                        questions.append(embed_text)
-
-                idx += 1
+            questions = self.get_followon_questions(answer, matches, max_sources)
 
         answer.follow_on_questions = questions
 
@@ -956,24 +999,90 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
-    async def aquery(
+    def get_reference_dict(self, references):
+        dict_ = {"references": []}
+        i = 1
+        ref = ''
+        url = ''
+        while(re.findall(rf'{i}. .*', references)) != []:
+            d = {}
+            ref_str = re.findall(rf'{i}. .*', references)[0][3:]
+            if ref_str.startswith('['):
+                ref = re.findall(r'\[.*\]', ref_str)[0][1:][:-1]
+                url = re.findall(r'\(.*\)', ref_str)[0][1:][:-1]
+            else:
+                ref = ref_str
+                url = ref_str
+            d["rank"] = i
+            d["ref"] = ref
+            d["url"] = url
+            dict_["references"].append(d)
+            i = i + 1
+
+        return dict_
+
+
+    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
+        category_filter = self.category_filter_get(state_category, designation_category)
+        logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
+        
+        matches_with_score = self.cache_index.similarity_search_with_score(
+            answer.question, k=k, fetch_k=k,
+            where_filter=category_filter
+        )
+
+        answer.answer = matches_with_score[0][0].page_content
+        answer.faq_vectorstore_score = matches_with_score[0][1]
+        answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
+        answer.faq_doc = matches_with_score[0][0].metadata['doc']
+        if stream_json:
+            answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
+        else:
+            answer.references = matches_with_score[0][0].metadata['references']
+        answer.trace_id = trace_id
+        answer.faq_match_question = matches_with_score[0][0].metadata['question']
+
+        questions = []
+        if answer.faq_vectorstore_score > 0.9 and follow_on_questions:
+            category_filter = self.category_filter_get(state_category, designation_category, topic)
+            _k = 10
+            matches_with_score = self.texts_index.similarity_search_with_score(
+                answer.question, k=_k, fetch_k=5 * _k,
+                where_filter=category_filter
+            )
+            matches, scores = self.filter_unique_matches(matches_with_score)
+
+            for m in matches:
+                if isinstance(m.metadata["doc"], str):
+                    m.metadata["doc"] = json.loads(m.metadata["doc"])
+            
+            questions = self.get_followon_questions(answer, matches, max_sources)
+
+        answer.follow_on_questions = questions
+
+        return answer
+
+
+    async def vectorstore_call(
         self,
         query: str,
-        k: int = 10,
-        max_sources: int = 5,
-        length_prompt: str = "about 100 words",
-        marginal_relevance: bool = True,
+        k: Optional[int] = 10,
+        max_sources: Optional[int] = 5,
+        marginal_relevance: Optional[bool] = True,
         answer: Optional[Answer] = None,
+        length_prompt: Optional[str] = "about 100 words",
         key_filter: Optional[bool] = None,
-        get_callbacks: CallbackFactory = lambda x: None,
-        disable_answer: bool = False,
+        get_callbacks: Optional[CallbackFactory] = lambda x: None,
+        disable_answer: Optional[bool] = False,
         reranker: Optional[str] = "None", # Replace this with enum
         trace_id: Optional[str] = None,
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
+        faq_dataset_flag: Optional[bool] = False,
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
+        stream_json: Optional[bool] = False,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -991,21 +1100,44 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            answer = await self.aget_evidence(
-                answer,
-                k=k,
-                max_sources=max_sources,
-                marginal_relevance=marginal_relevance,
-                get_callbacks=get_callbacks,
-                disable_answer=disable_answer,
-                reranker=reranker,
-                trace_id=trace_id,
-                state_category=state_category,
-                designation_category=designation_category,
-                topic=topic,
-                follow_on_questions=follow_on_questions,
-            )
+            if faq_dataset_flag:
+                answer = await self.faq_aget_evidence(
+                    answer,
+                    k=k,
+                    trace_id=trace_id,
+                    state_category=state_category,
+                    designation_category=designation_category,
+                    topic=topic,
+                    follow_on_questions=follow_on_questions,
+                    max_sources=max_sources,
+                    stream_json=stream_json,
+                )
+            else:
+                answer = await self.aget_evidence(
+                    answer,
+                    k=k,
+                    max_sources=max_sources,
+                    marginal_relevance=marginal_relevance,
+                    get_callbacks=get_callbacks,
+                    disable_answer=disable_answer,
+                    reranker=reranker,
+                    trace_id=trace_id,
+                    state_category=state_category,
+                    designation_category=designation_category,
+                    topic=topic,
+                    follow_on_questions=follow_on_questions,
+                )
 
+        return answer
+
+
+    async def aquery(
+        self,
+        answer: Answer,
+        get_callbacks: CallbackFactory = lambda x: None,
+        trace_id: Optional[str] = None,
+        stream_json: Optional[bool] = False,
+    ) ->  Answer:
         if self.prompts.pre is not None:
             chain = make_chain(
                 self.prompts.pre,
@@ -1070,34 +1202,48 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
-
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = ""
+        bib_str = [] if stream_json else ""
         for i, c in enumerate(answer.contexts):
             name = c.text.name
             citation = c.text.doc.citation
 
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
             #if name_in_text(name, answer_text):
-            #   bib[name] = citation
+            #   bib[name] = citationi
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+
             if c.text.ext_path:
-                url = c.text.ext_path
-                bib_str += f"\n {i+1}. [{name}]({url})"
+                if c.text.doc_source.lower() == 'external':
+                    url = c.text.ext_path
+                else:
+                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+
+                if stream_json:
+                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+                else:
+                    bib_str += f"\n {i+1}. [{name}]({url})"
             else:
                 if name != citation:
-                    bib_str += f"\n {i+1}. {name}: {citation}"
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {name}: {citation}"
                 else:
-                    bib_str += f"\n {i+1}. {citation}"
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {citation}"
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
             formatted_answer += f"\nReferences\n\n{bib_str}\n"
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
-        answer.references = bib_str
+        answer.references = {"references":bib_str, "id":trace_id} if stream_json else bib_str
 
         if self.prompts.post is not None:
             chain = make_chain(
