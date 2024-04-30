@@ -1037,6 +1037,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.faq_doc = matches_with_score[0][0].metadata['doc']
         if stream_json:
             answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
+            answer.references["id"] = trace_id
         else:
             answer.references = matches_with_score[0][0].metadata['references']
         answer.trace_id = trace_id
@@ -1079,7 +1080,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        faq_dataset_flag: Optional[bool] = False,
+        enable_cache: Optional[bool] = False,
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
         stream_json: Optional[bool] = False,
@@ -1100,7 +1101,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            if faq_dataset_flag:
+            if enable_cache:
                 answer = await self.faq_aget_evidence(
                     answer,
                     k=k,
