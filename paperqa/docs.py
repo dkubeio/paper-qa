@@ -434,7 +434,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self, name: Optional[str] = None, dockey: Optional[DocKey] = None
     ) -> None:
         """Delete a document from the collection."""
-        name = os.path.basename(name)
+        if not name.startswith('http'):
+            name = os.path.basename(name)
         doc_list = []
         dockey_list = []
         if name is not None:
