@@ -891,7 +891,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
-                        dockey=match.metadata["dockey"],
+                        dockey=match.metadata.get("dockey"),
                         doc_source=match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
