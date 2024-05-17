@@ -46,71 +46,71 @@ summary_prompt = PromptTemplate(
     "Output:\n\n",
 )
 
-# qa_prompt = PromptTemplate(
-#     input_variables=["context", "answer_length", "question"],
-#     template="Write an answer in {answer_length} "
-#     "for the question below based on the provided context. "
-#     "If the context provides insufficient information and the question cannot be directly answered, "
-#     'reply "I cannot answer". '
-#     "For each part of your answer, indicate which sources most support it "
-#     "via valid citation markers at the end of sentences, like (Example2012). \n"
-#     "Include confidence score of the generated answer on the scale of 1 to 10 \n"
-#     "Do not explain Confidence score. \n"
-#     "Context (with relevance scores):\n {context}\n"
-#     "Question: {question}\n"
-#     "Answer: ",
-# )
-
 qa_prompt = PromptTemplate(
-    input_variables=["context", "answer_length", "question", "json_format"],
-    template="You are an expert Call Center Assistant for Health Insurance market. \n"
-    "Please act as an impartial judge and evaluate quality of Context provided for the User's Question displayed below. \n"
-    "Your evaluation should consider factors such as the accuracy, depth, level of detail, relevance and helpfulness of the Context to answer the User's Question precisely. \n"
-    "Each factor is worth 1 point. \n"
-    "Be objective as possible. \n"
-    # "After providing your Explanation, please rate the context on a scale of the 1 to 5 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[3]]\". \n"
-    "Please rate the context on a scale of the 1 to 5 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[3]]\". \n"
-
-    "After rating the context now, Write an answer in {answer_length} "
-    "for the user's question below based on the provided context. "
-    # "for the user's question based on the provided context. "
+    input_variables=["context", "answer_length", "question"],
+    template="Write an answer in {answer_length} "
+    "for the question below based on the provided context. "
     "If the context provides insufficient information and the question cannot be directly answered, "
     'reply "I cannot answer". '
     "For each part of your answer, indicate which sources most support it "
     "via valid citation markers at the end of sentences, like (Example2012). \n"
-    # "Context :\n {context}\n"
-    # "User's Question: {question}{json_format}\n"
-    # "Answer: \n\n",
-    "[User's Question] \n"
-    "{question} \n"
+    "Include confidence score of the generated answer on the scale of 1 to 10 \n"
+    "Do not explain Confidence score. \n"
+    "Context (with relevance scores):\n {context}\n"
+    "Question: {question}\n"
+    "Answer: ",
+)
 
-    "[The start of the Context] \n"
-    "{context} \n"
-    "[The end of the Context] \n"
+# qa_prompt = PromptTemplate(
+#     input_variables=["context", "answer_length", "question", "json_format"],
+#     template="You are an expert Call Center Assistant for Health Insurance market. \n"
+#     "Please act as an impartial judge and evaluate quality of Context provided for the User's Question displayed below. \n"
+#     "Your evaluation should consider factors such as the accuracy, depth, level of detail, relevance and helpfulness of the Context to answer the User's Question precisely. \n"
+#     "Each factor is worth 1 point. \n"
+#     "Be objective as possible. \n"
+#     # "After providing your Explanation, please rate the context on a scale of the 1 to 5 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[3]]\". \n"
+#     "Please rate the context on a scale of the 1 to 5 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[3]]\". \n"
 
-    "[The start of the Answer] \n"
-    "Answer: \n"
-    "[The end of the Answer] \n"
-    # "[Start of your Explanation] \n"
-    # "Explanation: \n"
-    # "[End of your Explanation] \n"
+#     "After rating the context now, Write an answer in {answer_length} "
+#     "for the user's question below based on the provided context. "
+#     # "for the user's question based on the provided context. "
+#     "If the context provides insufficient information and the question cannot be directly answered, "
+#     'reply "I cannot answer". '
+#     "For each part of your answer, indicate which sources most support it "
+#     "via valid citation markers at the end of sentences, like (Example2012). \n"
+#     # "Context :\n {context}\n"
+#     # "User's Question: {question}{json_format}\n"
+#     # "Answer: \n\n",
+#     "[User's Question] \n"
+#     "{question} \n"
 
-    "[Start of Your Rating] \n"
-    "Rating: [[rating]] \n"
-    "[End of your Rating] \n"
+#     "[The start of the Context] \n"
+#     "{context} \n"
+#     "[The end of the Context] \n"
 
-    # "Write an answer in {answer_length} "
-    # "Now, Write an answer in {answer_length} "
-    # "for the user's question below based on the provided context. "
-    # "for the user's question based on the provided context. "
-    # "If the context provides insufficient information and the question cannot be directly answered, "
-    # 'reply "I cannot answer". '
-    # "For each part of your answer, indicate which sources most support it "
-    # "via valid citation markers at the end of sentences, like (Example2012). \n"
-    # "Context :\n {context}\n"
-    # "User's Question: {question}{json_format}\n"
-    # "Answer: \n\n",
-    )
+#     "[The start of the Answer] \n"
+#     "Answer: \n"
+#     "[The end of the Answer] \n"
+#     # "[Start of your Explanation] \n"
+#     # "Explanation: \n"
+#     # "[End of your Explanation] \n"
+
+#     "[Start of Your Rating] \n"
+#     "Rating: [[rating]] \n"
+#     "[End of your Rating] \n"
+
+#     # "Write an answer in {answer_length} "
+#     # "Now, Write an answer in {answer_length} "
+#     # "for the user's question below based on the provided context. "
+#     # "for the user's question based on the provided context. "
+#     # "If the context provides insufficient information and the question cannot be directly answered, "
+#     # 'reply "I cannot answer". '
+#     # "For each part of your answer, indicate which sources most support it "
+#     # "via valid citation markers at the end of sentences, like (Example2012). \n"
+#     # "Context :\n {context}\n"
+#     # "User's Question: {question}{json_format}\n"
+#     # "Answer: \n\n",
+#     )
 
 select_paper_prompt = PromptTemplate(
     input_variables=["question", "papers"],
