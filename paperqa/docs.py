@@ -683,7 +683,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         new_scores = []
         unique_set = set()
 
+        i = 0
         for m, score in zip(matches, scores):
+            print(i)
+            i = i + 1
+            # print(m) 
             # the relevant vectors are already in order, just sorting them
             relevant_vectors = tuple(sorted(m.metadata["relevant_vectors"]))
             if relevant_vectors not in unique_set:
@@ -746,8 +750,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
+            _k = 1
             matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
+            # matches_with_score = self.cache_index.similarity_search_with_score(
+                answer.question, k=_k, fetch_k=1 * _k,
                 where_filter=category_filter
             )
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
@@ -802,6 +808,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
+            print(match.metadata["gen_question"])
 
         # def get_next_context(source):
         #     doc_vector_ids = source.metadata['doc_vector_ids']
@@ -810,22 +817,22 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         #     if len(doc_vector_ids) > 3:
         #         sid = source.metadata['_additional']['id']
         #         sid_index = doc_vector_ids.index(sid)
-        #
+        # 
         #         if not sid_index:
         #             vid = doc_vector_ids[sid_index + 3]
         #         elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
         #             vid = doc_vector_ids[sid_index + 2]
-        #
+        # 
         #         if vid != '':
         #             data_object = self.texts_index._client.data_object.get_by_id(
         #                 vid,
         #                 class_name=self.texts_index._index_name,
         #             )
-        #
+        # 
         #             parent_chunk = data_object['properties']['parent_chunk']
-        #
+        # 
         #     return parent_chunk
-        #
+        # 
         # next_contexts = [get_next_context(m) for m in matches]
 
         async def process(match):
@@ -1103,7 +1110,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            if enable_cache:
+            if enable_cache and (1==0):
                 answer = await self.faq_aget_evidence(
                     answer,
                     k=k,
