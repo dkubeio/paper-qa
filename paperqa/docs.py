@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import json
 import logging
@@ -746,28 +747,49 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
-                where_filter=category_filter
-            )
-            logging.trace(f"length of matches with score: {len(matches_with_score)}")
-            end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+            def get_matches_scores(vector_index_flag):
+                if vector_index_flag == "chunks":
+                    vector_index = self.texts_index
+                elif vector_index_flag == "genques": 
+                    vector_index = self.cache_index
+                else:
+                    return -1, -1
 
-            # matches_with_score is a list of tuples (doc, score)
-            # fetch all the scores in a list, sort them in descending order
+                matches_with_score = vector_index.similarity_search_with_score(
+                    answer.question, k=_k, fetch_k=5 * _k,
+                    where_filter=category_filter
+                )
+                logging.trace(f"length of matches with score: {len(matches_with_score)}")
+                end_time = datetime.now()
+                logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
-            matches, scores = self.filter_unique_matches(matches_with_score)
+                # matches_with_score is a list of tuples (doc, score)
+                # fetch all the scores in a list, sort them in descending order
 
-            rank = 1
-            for m, score in zip(matches, scores):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
-                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-                rank += 1
+                matches, scores = self.filter_unique_matches(matches_with_score)
 
-        for m in matches:
+                rank = 1
+                for m, score in zip(matches, scores):
+                    vector_id = m.metadata["_additional"]["id"]
+                    logging.trace(f"trace_id:{trace_id} class:{vector_index_flag} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                                  f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                                  f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+                    rank += 1
+
+                return matches, scores
+
+            chunks_matches, chunks_scores = get_matches_scores("chunks")
+            if chunks_matches ==  chunks_scores == -1:
+                print("ERROR : In chunk class vector index")
+            question_matches, question_scores = get_matches_scores("genques")
+            if question_matches ==  question_scores == -1:
+                print("ERROR : In question class vector index")
+    
+        for m in chunks_matches:
+            if isinstance(m.metadata["doc"], str):
+                m.metadata["doc"] = json.loads(m.metadata["doc"])
+
+        for m in question_matches:
             if isinstance(m.metadata["doc"], str):
                 m.metadata["doc"] = json.loads(m.metadata["doc"])
 
@@ -786,47 +808,75 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         #    ]
 
         # check if it is deleted
-        matches = [
+        chunks_matches = [
             m
-            for m in matches
+            for m in chunks_matches
             if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
         ]
 
+        question_matches = [
+            m
+            for m in question_matches
+            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
+        ]
         # check if it is already in answer
-        cur_names = [c.text.name for c in answer.contexts]
-        matches = [m for m in matches if m.metadata["name"] not in cur_names]
+        # cur_names = [c.text.name for c in answer.contexts]
+        # matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        matches = matches[:max_sources]
+        # matches = matches[:max_sources]
+        scores = []
+        cm = []
+        qm = []
+        for i, m in enumerate(chunks_matches[:max_sources]):
+            if chunks_scores[i] > 0.6:
+                scores.append(chunks_scores[i])
+                cm.append(m)  
+        for i, m in enumerate(question_matches[:max_sources]):
+            if question_scores[i] > 0.6:
+                scores.append(question_scores[i])
+                qm.append(m)  
+        matches = cm + qm
         
+        # for i, m in enumerate(matches):
+        #     print(m.metadata['doc'], scores[i])
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
 
-        # def get_next_context(source):
-        #     doc_vector_ids = source.metadata['doc_vector_ids']
-        #     parent_chunk = ''
-        #     vid = ''
-        #     if len(doc_vector_ids) > 3:
-        #         sid = source.metadata['_additional']['id']
-        #         sid_index = doc_vector_ids.index(sid)
-        #
-        #         if not sid_index:
-        #             vid = doc_vector_ids[sid_index + 3]
-        #         elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
-        #             vid = doc_vector_ids[sid_index + 2]
-        #
-        #         if vid != '':
-        #             data_object = self.texts_index._client.data_object.get_by_id(
-        #                 vid,
-        #                 class_name=self.texts_index._index_name,
-        #             )
-        #
-        #             parent_chunk = data_object['properties']['parent_chunk']
-        #
-        #     return parent_chunk
-        #
-        # next_contexts = [get_next_context(m) for m in matches]
+        def get_next_context(source):
+            doc_vector_ids = source.metadata['doc_vector_ids']
+            doc_vector_ids = ast.literal_eval(str(doc_vector_ids))
+            sid = None
+            if source.metadata.get('gen_question'):
+                sid = source.metadata['relevant_vectors'][-1]
+            else:
+                sid = source.metadata['_additional']['id']
+            parent_chunk = ''
+            vid = ''
+            if len(doc_vector_ids) > 3:
+                # sid = source.metadata['_additional']['id']
+                sid_index = doc_vector_ids.index(sid)
+                sid = str(sid)
+        
+                if not sid_index:
+                    vid = doc_vector_ids[sid_index + 3]
+                elif sid_index > 0 and sid_index < (len(doc_vector_ids) - 3):
+                    vid = doc_vector_ids[sid_index + 2]
+                
+                if vid != '':
+                    data_object = self.texts_index._client.data_object.get_by_id(
+                        vid,
+                        class_name=self.texts_index._index_name,
+                    )
+        
+                    parent_chunk = data_object['properties']['parent_chunk']
+        
+            return parent_chunk
+        
+        next_contexts = [get_next_context(m) for m in matches]
+        for i,m in enumerate(matches):
+            m.page_content = m.page_content + f" {next_contexts[i]}"
 
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
@@ -882,11 +932,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if disable_answer:
             contexts = [
                 Context(
-                    context=match.page_content,  # + next_contexts[idx],
+                    context=match.page_content + next_contexts[idx],
                     score=10,
                     weaviate_score=scores[idx],
                     text=Text(
-                        text=match.page_content,  # + next_contexts[idx],
+                        text=match.page_content + next_contexts[idx],
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
@@ -929,11 +979,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             text=match.page_content,
                             name=match.metadata["name"],
                             doc=Doc(**match.metadata["doc"]),
+                            vector_id=match.metadata["_additional"]["id"],
+                            ext_path=match.metadata["ext_path"],
+                            dockey=match.metadata.get("dockey"),
+                            doc_source=match.metadata["doc_source"][0],
                         ),
                         vector_id=match.metadata["_additional"]["id"],
-                        score=match.metadata['score'],
+                        # weaviate_score=scores[idx],
+                        weaviate_score=match.metadata['score'],
                     )
-                    for match in matches
+                    for idx, match in enumerate(matches)
                 ]
 
             else:
@@ -1103,7 +1158,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            if enable_cache:
+            if enable_cache and (1==0):
                 answer = await self.faq_aget_evidence(
                     answer,
                     k=k,
