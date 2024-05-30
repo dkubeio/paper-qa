@@ -799,7 +799,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        matches = matches[:max_sources]
+        # matches = matches[:max_sources]
+        matches = [ m for i,m in enumerate(matches[:max_sources]) if scores[i] > 0.6 ]
         
         # create score for each match
         for i, match in enumerate(matches):
