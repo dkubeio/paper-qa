@@ -832,7 +832,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if chunks_scores[i] > 0.6:
                 scores.append(chunks_scores[i])
                 cm.append(m)  
-        for i, m in enumerate(question_matches[:max_sources]):
+        for i, m in enumerate(question_matches[:(2*max_sources)]):
             if question_scores[i] > 0.6:
                 scores.append(question_scores[i])
                 qm.append(m)  
@@ -849,7 +849,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             doc_vector_ids = ast.literal_eval(str(doc_vector_ids))
             sid = None
             if source.metadata.get('gen_question'):
-                sid = source.metadata['relevant_vectors'][-1]
+                # Check the lenght of the relevant vectors 
+                if len(source.metadata['relevant_vectors']) > 1:
+                    sid = source.metadata['relevant_vectors'][-2]
+                else:
+                    sid = source.metadata['relevant_vectors'][-1]
             else:
                 sid = source.metadata['_additional']['id']
             parent_chunk = ''
@@ -954,7 +958,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 start_time = datetime.now()
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
-                    model_name="BAAI/bge-reranker-large", max_length=512
+                    # model_name="BAAI/bge-reranker-large", max_length=512
+                    model_name="BAAI/bge-reranker-v2-m3", max_length=1024
                 )
                 scores = model.predict(query_and_matches)
                 for match, score in zip(matches, scores):
@@ -1002,7 +1007,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
-        answer.contexts = answer.contexts[:max_sources]
+        # answer.contexts = answer.contexts[:max_sources]
+        answer.contexts = answer.contexts[:3]
         context_str = "\n\n".join(
             [
                 f"{c.text.name}: {c.context}"
