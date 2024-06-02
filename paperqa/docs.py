@@ -833,6 +833,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         
         next_contexts = [get_next_context(m) for m in matches]
 
+        for i,m in enumerate(matches):
+            m.page_content = m.page_content + f" {next_contexts[i]}"
+
         async def process(match):
             callbacks = get_callbacks("evidence:" + match.metadata["name"])
             summary_chain = make_chain(
@@ -887,11 +890,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if disable_answer:
             contexts = [
                 Context(
-                    context=match.page_content,  # + next_contexts[idx],
+                    context=match.page_content,
                     score=10,
                     weaviate_score=scores[idx],
                     text=Text(
-                        text=match.page_content,  # + next_contexts[idx],
+                        text=match.page_content,
                         name=match.metadata["name"],
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
