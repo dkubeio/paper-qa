@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import tempfile
+import token
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -24,6 +25,7 @@ from langchain.text_splitter import TextSplitter
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
+from regex import P
 from sentence_transformers import CrossEncoder
 from pathlib import Path
 
@@ -241,6 +243,65 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return docname, text_chunks
         return None, None
 
+    def generate_chunks_nlmatics_sections(
+        self,
+        path: Path,
+        citation: Optional[str] = None,
+        docname: Optional[str] = None,
+        disable_check: bool = False,
+        dockey: Optional[DocKey] = None,
+        chunk_chars: int = 3000,
+        overlap=100,
+        text_splitter: TextSplitter = None,
+        base_dir: Path = None,      
+    ):        
+        if dockey is None:
+            dockey = md5sum(path)
+        
+
+        docname = Path(path).parent
+        docname = docname.stem + docname.suffix
+
+        print(f"docname: {docname} path: {path} dockey: {dockey}")
+        fake_doc = Doc(docname=docname, citation="", dockey=dockey)
+
+        # read the path file as json
+        data = None
+        with open(path) as f:
+            data = json.load(f)
+
+        texts = []
+        for section in data:
+            text = section.get('text', "")
+            
+            # skip the empty sections
+            if not len(text):
+                continue
+
+            for chunk in text_splitter.split_text(text):
+                texts.append(Text(text=chunk, name=f"{docname}", doc=fake_doc))
+
+        text_chunks = []
+        for text in texts:
+            if text.text:
+                text_chunks.append({
+                    "page": text.name, 
+                    "text_len": len(text.text),
+                    "chunk": text.text, 
+                    "vector_id": str(uuid.uuid4()),
+                    "tokens": text_splitter.count_tokens(text=text.text),
+                    "page_text": text.page_text, 
+                    "page_no" : text.page_no,
+                    "is_table": text.is_table, 
+                    "docname": docname,
+                    "ext_path": text.ext_path,
+                    "doc_source": text.doc_source,
+                    "state_category": text.state_category,
+                    "toolname": "nlmatics"
+                })
+
+        return None, text_chunks
+
 
     def generate_chunks(
         self,
@@ -434,7 +495,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         self, name: Optional[str] = None, dockey: Optional[DocKey] = None
     ) -> None:
         """Delete a document from the collection."""
-        name = os.path.basename(name)
+        if not name.startswith('http'):
+            name = os.path.basename(name)
         doc_list = []
         dockey_list = []
         if name is not None:
@@ -759,7 +821,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches, scores = self.filter_unique_matches(matches_with_score)
 
             rank = 1
-            for m, score in zip(matches, scores):
+            for m, score in zip(matches[:5], scores[:5]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
@@ -890,6 +952,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         doc=Doc(**match.metadata["doc"]),
                         vector_id=match.metadata["_additional"]["id"],
                         ext_path=match.metadata["ext_path"],
+                        dockey=match.metadata["dockey"],
                         doc_source=match.metadata["doc_source"][0],
                     ),
                     vector_id=match.metadata["_additional"]["id"]
