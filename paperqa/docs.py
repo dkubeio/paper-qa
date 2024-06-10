@@ -904,7 +904,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 start_time = datetime.now()
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
-                    model_name="BAAI/bge-reranker-large", max_length=512
+                    # model_name="BAAI/bge-reranker-large", max_length=512
+                    model_name="BAAI/bge-reranker-v2-m3", max_length=1024
                 )
                 scores = model.predict(query_and_matches)
                 for match, score in zip(matches, scores):
