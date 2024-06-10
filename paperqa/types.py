@@ -7,7 +7,7 @@ from langchain.callbacks.manager import (
     CallbackManagerForChainRun,
 )
 from langchain.prompts import PromptTemplate
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from .prompts import (
     citation_prompt,
@@ -81,15 +81,16 @@ class PromptCollection(BaseModel):
     system: str = default_system_prompt
     skip_summary: bool = False
 
-    @validator("summary")
-    def check_summary(cls, v: PromptTemplate) -> PromptTemplate:
+    @field_validator("llm", "summary_llm", check_fields=False)
+    def check_llm(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(set(summary_prompt.input_variables)):
             raise ValueError(
                 f"Summary prompt can only have variables: {summary_prompt.input_variables}"
             )
         return v
 
-    @validator("qa")
+
+    @field_validator("qa")
     def check_qa(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(set(qa_prompt.input_variables)):
             raise ValueError(
@@ -97,7 +98,7 @@ class PromptCollection(BaseModel):
             )
         return v
 
-    @validator("select")
+    @field_validator("select")
     def check_select(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(
                 set(select_paper_prompt.input_variables)
@@ -107,27 +108,30 @@ class PromptCollection(BaseModel):
             )
         return v
 
-    @validator("pre")
+
+    @field_validator("pre")
     def check_pre(cls, v: Optional[PromptTemplate]) -> Optional[PromptTemplate]:
         if v is not None:
             if set(v.input_variables) != set(["question"]):
                 raise ValueError("Pre prompt must have input variables: question")
         return v
 
-    @validator("post")
+
+    @field_validator("post")
     def check_post(cls, v: Optional[PromptTemplate]) -> Optional[PromptTemplate]:
         if v is not None:
             # kind of a hack to get list of attributes in answer
-            attrs = [a.name for a in Answer.__fields__.values()]
+            attrs = [a.name for a in Answer.model_fields.values()]
             if not set(v.input_variables).issubset(attrs):
                 raise ValueError(f"Post prompt must have input variables: {attrs}")
         return v
 
-    @validator("followup")
+
+    @field_validator("followup")
     def check_followup(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(set(followup_system_prompt.input_variables)):
             raise ValueError(
-                f"followup_system_prompt prompt can only have variables: {summary_prompt.input_variables}"
+                f"followup_system_prompt prompt can only have variables: {followup_system_prompt.input_variables}"
             )
         return v
 

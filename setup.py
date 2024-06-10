@@ -19,7 +19,7 @@ setup(
     install_requires=[
         "pypdf",
         "pymupdf",
-        "pydantic<2",
+        "pydantic>2",
         # "langchain>=0.0.198",
         # "openai >= 0.27.8",
         "langchain>=0.0.303",

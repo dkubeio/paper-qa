@@ -7,7 +7,7 @@ from langchain.callbacks.manager import (
     CallbackManagerForChainRun,
 )
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory.chat_memory import BaseChatMemory
 from langchain.prompts import PromptTemplate, StringPromptTemplate
 from langchain.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate

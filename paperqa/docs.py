@@ -15,13 +15,13 @@ import traceback
 from urllib.parse import quote
 
 from langchain.base_language import BaseLanguageModel
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.embeddings.base import Embeddings
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.memory.chat_memory import BaseChatMemory
 from langchain.text_splitter import TextSplitter
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 # from pydantic import BaseModel, validator
 from sentence_transformers import CrossEncoder
