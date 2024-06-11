@@ -255,19 +255,19 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=100)
         # loose check to see if document was loaded
+        not_text = maybe_is_text(texts[0].text)
         if (
             len(texts) == 0
             or len(texts[0].text) < 10
-            or (not disable_check and not maybe_is_text(texts[0].text))
+            or (not disable_check and not not_text)
         ):
             raise ValueError(
-                f"This does not look like a text document: {path}. Path disable_check to ignore this error."
+                f"This does not look like a text document: {path}. {len(texts)}, {not_text} Path disable_check to ignore this error."
             )
         if self.add_texts(texts, doc):
             text_chunks = [x.text for x in texts]
             return docname, text_chunks
         return None, None
-
 
     def generate_chunks(
         self,
@@ -325,13 +325,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         doc = Doc(docname=docname, citation=citation, dockey=dockey)
         texts = read_doc(path, doc, chunk_chars=chunk_chars, overlap=overlap, text_splitter=text_splitter)
         # loose check to see if document was loaded
+        not_text = maybe_is_text(texts[0].text)
         if (
             len(texts) == 0
             or len(texts[0].text) < 10
             or (not disable_check and not maybe_is_text(texts[0].text))
         ):
             raise ValueError(
-                f"This does not look like a text document: {path}. Path disable_check to ignore this error."
+                f"This does not look like a text document: {path}. {len(texts)}, {not_text} Path disable_check to ignore this error."
             )
 
         update_texts = []
@@ -405,7 +406,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
 
-
         vector_ids = [x.vector_id for x in texts]
         if self.texts_index is not None and not sllm_qna:
             try:
@@ -419,7 +419,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         map(lambda x: (x.text, x.embeddings), texts)
                     )
 
-                
                 self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
@@ -435,19 +434,19 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.answer, x.embeddings), texts)
                 )
-                
+
                 self.cache_index.add_embeddings(
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
                 )
-            
+
                 self.texts += texts
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding faq embeddings")
 
         if self.doc_index is not None:
-            #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+            # self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
             self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
 
         self.docs[doc.dockey] = doc
@@ -490,7 +489,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.texts_index is not None:
             for doc in doc_list:
                 self.texts_index.delete_by_attribute({'name':doc.docname})
-
 
     async def adoc_match(
         self,
@@ -680,7 +678,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return category_filter
 
-
     def get_evidence(
         self,
         answer: Answer,
@@ -720,7 +717,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         scores = sorted([m[1] for m in matches_with_score], reverse=True)
         matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
         matches = [match_with_score[0] for match_with_score in matches_with_score]
-        
+
         new_matches = []
         new_scores = []
         unique_set = set()
@@ -735,7 +732,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
-
     def get_followon_questions(self,answer, matches, max_sources):
         questions = []
         idx = 0
@@ -746,9 +742,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     questions.append(embed_text)
 
             idx += 1
-        
-        return questions
 
+        return questions
 
     async def aget_evidence(
         self,
@@ -821,7 +816,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.follow_on_questions = questions
 
         # ok now filter
-        #if answer.dockey_filter is not None:
+        # if answer.dockey_filter is not None:
         #    matches = [
         #        m
         #        for m in matches
@@ -841,7 +836,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now fnally cut down
         matches = matches[:max_sources]
-        
+
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -987,7 +982,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 # filter out failures
                 contexts = [c for c in results if c is not None]
 
-    
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
@@ -1067,11 +1061,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return dict_
 
-
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-        
+
         matches_with_score = self.cache_index.similarity_search_with_score(
             answer.question, k=k, fetch_k=k,
             where_filter=category_filter
@@ -1102,13 +1095,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for m in matches:
                 if isinstance(m.metadata["doc"], str):
                     m.metadata["doc"] = json.loads(m.metadata["doc"])
-            
+
             questions = self.get_followon_questions(answer, matches, max_sources)
 
         answer.follow_on_questions = questions
 
         return answer
-
 
     async def vectorstore_call(
         self,
@@ -1178,7 +1170,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
-
     async def aquery(
         self,
         answer: Answer,
@@ -1197,7 +1188,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 question=answer.question, callbacks=get_callbacks("pre")
             )
             answer.context = pre + "\n\n" + answer.context
-
 
         bib = dict()
         if len(answer.context) < 10 and not self.memory:
@@ -1262,7 +1252,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             citation = c.text.doc.citation
 
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
+            # if name_in_text(name, answer_text):
             #   bib[name] = citationi
             SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
 

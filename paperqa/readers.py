@@ -2,15 +2,15 @@ import json
 import re
 import traceback
 from pathlib import Path
-from typing import List
+from typing import Any, BinaryIO, Dict, List, Set, Tuple, Union, cast
 
 import fitz
 from html2text import html2text
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.text_splitter import TextSplitter
-from .types import Doc, Text
-from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
 
+from langchain.text_splitter import (RecursiveCharacterTextSplitter,
+                                     TextSplitter)
+
+from .types import Doc, Text
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
@@ -144,7 +144,7 @@ def parse_json(
     text_splitter: TextSplitter=None, categories: str=None
 ) -> List[Text]:
     if text_splitter is None:
-            text_splitter = RecursiveCharacterTextSplitter(
+        text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
                 length_function=len, is_separator_regex=False,
             )
@@ -168,8 +168,15 @@ def parse_json(
         raw_texts = text_splitter.split_text(page_text)
         if not is_toc:
             texts = [
-                Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
-                     page_no=page_no, ext_path=ext_path)
+                Text(
+                    text=t,
+                    name=f"{docname} pages {page_no}",
+                    doc=doc,
+                    page_text=page_text,
+                    is_table=is_table,
+                    page_no=page_no,
+                    ext_path=ext_path,
+                )
                 for i, t in enumerate(raw_texts)
             ]
     else:
