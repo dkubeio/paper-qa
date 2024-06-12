@@ -377,7 +377,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
 
+        question_texts = []
+        texts_ = []
+        for t in texts:
+            if t.follow_on_question:
+                question_texts.append(t)
+            else:
+                texts_.append(t)
 
+        texts = texts_
         vector_ids = [x.vector_id for x in texts]
         if self.texts_index is not None and not sllm_qna:
             try:
@@ -402,16 +410,19 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding embeddings.")
 
+        texts = question_texts
+        sllm_qna = True
+        vector_ids = [x.vector_id for x in texts]
         if self.cache_index is not None and sllm_qna:
             try:
                 vec_store_text_and_embeddings = list(
-                    map(lambda x: (x.answer, x.embeddings), texts)
+                    map(lambda x: (x.text, x.embeddings), texts)
                 )
                 
                 self.cache_index.add_embeddings(
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
-                    metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
+                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
                 )
             
                 self.texts += texts
@@ -746,7 +757,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
-            matches_with_score = self.texts_index.similarity_search_with_score(
+            # matches_with_score = self.texts_index.similarity_search_with_score(
+            matches_with_score = self.cache_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=category_filter
             )
@@ -1103,7 +1115,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if len(keys) > 0:
                     answer.dockey_filter = keys
 
-            if enable_cache:
+            if enable_cache and (1==0):
                 answer = await self.faq_aget_evidence(
                     answer,
                     k=k,
@@ -1202,6 +1214,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 )
             except Exception as e:
                 answer_text = str(e)
+            
+            print(f"\n-------\nAnswer text : {answer_text}\n------------\n")
 
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
