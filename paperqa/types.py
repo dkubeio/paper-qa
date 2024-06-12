@@ -56,6 +56,7 @@ class Text(BaseModel):
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
     follow_on_question: Optional[bool] = None
+    gen_question: Optional[str] = None
 
 class Faq_Text(BaseModel):
     question: str
