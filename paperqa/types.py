@@ -57,6 +57,8 @@ class Text(BaseModel):
     doc_source: Optional[str] = None
     follow_on_question: Optional[bool] = None
     gen_question: Optional[str] = None
+    summarized_text: Optional[str] = None
+    generated_questions: Optional[str] = None
 
 class Faq_Text(BaseModel):
     question: str
