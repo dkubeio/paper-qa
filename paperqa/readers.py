@@ -175,10 +175,11 @@ def parse_json(
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
+        ext_path = json_contents['url']
 
         raw_texts = text_splitter.split_text(text)
         texts = [
-            Text(text=t, name=f"{doc_name}", doc=doc)
+            Text(text=t, name=f"{doc_name}", doc=doc, ext_path=ext_path)
             for i, t in enumerate(raw_texts)
         ]
 
