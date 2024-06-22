@@ -175,7 +175,7 @@ def parse_json(
     else:
         text = json_contents['text']
         doc_name = json_contents['url']
-        ext_path = json_contents['url']
+        ext_path = json_contents.get('ext_path', json_contents.get('url'))
 
         raw_texts = text_splitter.split_text(text)
         texts = [
