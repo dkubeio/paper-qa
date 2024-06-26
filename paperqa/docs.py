@@ -588,7 +588,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Optional[Tuple[str]] = None):
         category_filter = None
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
 
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -634,7 +633,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     }]
                 }
 
-        logging.trace(f"weaviate category filter:{category_filter}")
 
         return category_filter
 
@@ -743,7 +741,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
+            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
+            logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
