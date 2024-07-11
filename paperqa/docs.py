@@ -363,8 +363,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         if doc.docname in self.docnames:
             new_docname = self._get_unique_name(doc.docname)
-            for t in texts:
-                t.name = t.name.replace(doc.docname, new_docname)
+            if not sllm_qna:
+                for t in texts:
+                    t.name = t.name.replace(doc.docname, new_docname)
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
@@ -589,6 +590,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = None
 
 
+        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
+        
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
             if "Broker" in designation_category:
@@ -633,6 +636,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     }]
                 }
 
+        logging.trace(f"weaviate category filter:{category_filter}")
 
         return category_filter
 
@@ -741,9 +745,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
-            logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -1028,41 +1030,49 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-        
-        matches_with_score = self.cache_index.similarity_search_with_score(
-            answer.question, k=k, fetch_k=k,
-            where_filter=category_filter
-        )
-
-        answer.answer = matches_with_score[0][0].page_content
-        answer.faq_vectorstore_score = matches_with_score[0][1]
-        answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
-        answer.faq_doc = matches_with_score[0][0].metadata['doc']
-        if stream_json:
-            answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
-            answer.references["id"] = trace_id
-        else:
-            answer.references = matches_with_score[0][0].metadata['references']
-        answer.trace_id = trace_id
-        answer.faq_match_question = matches_with_score[0][0].metadata['question']
-
-        questions = []
-        if answer.faq_vectorstore_score > 0.9 and follow_on_questions:
-            category_filter = self.category_filter_get(state_category, designation_category, topic)
-            _k = 10
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
+       
+        try:
+            matches_with_score = self.cache_index.similarity_search_with_score(
+                answer.question, k=k, fetch_k=k,
                 where_filter=category_filter
             )
-            matches, scores = self.filter_unique_matches(matches_with_score)
+        except Exception as e:
+            print(f"ERROR: error in searching in cache, {e}")
+            answer.faq_vectorstore_score = 0.0 
+            return answer
+    
+        if matches_with_score:
+            answer.answer = matches_with_score[0][0].page_content
+            answer.faq_vectorstore_score = matches_with_score[0][1]
+            answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
+            answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
+            answer.faq_doc = matches_with_score[0][0].metadata['doc']
+            if stream_json:
+                answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
+                answer.references["id"] = trace_id
+            else:
+                answer.references = matches_with_score[0][0].metadata['references']
+            answer.trace_id = trace_id
+            answer.faq_match_question = matches_with_score[0][0].metadata['question']
+            answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
 
-            for m in matches:
-                if isinstance(m.metadata["doc"], str):
-                    m.metadata["doc"] = json.loads(m.metadata["doc"])
-            
-            questions = self.get_followon_questions(answer, matches, max_sources)
+            questions = []
+            if answer.faq_vectorstore_score > 0.9 and follow_on_questions:
+                category_filter = self.category_filter_get(state_category, designation_category, topic)
+                _k = 10
+                matches_with_score = self.texts_index.similarity_search_with_score(
+                    answer.question, k=_k, fetch_k=5 * _k,
+                    where_filter=category_filter
+                )
+                matches, scores = self.filter_unique_matches(matches_with_score)
 
-        answer.follow_on_questions = questions
+                for m in matches:
+                    if isinstance(m.metadata["doc"], str):
+                        m.metadata["doc"] = json.loads(m.metadata["doc"])
+                
+                questions = self.get_followon_questions(answer, matches, max_sources)
+
+            answer.follow_on_questions = questions
 
         return answer
 
