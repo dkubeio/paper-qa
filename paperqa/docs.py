@@ -1038,42 +1038,50 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         except Exception as e:
             print(f"ERROR: error in searching in cache, {e}")
-            answer.faq_vectorstore_score = 0.0 
-            return answer
+            answer.faq_vectorstore_score = 0.0
+            matches_with_score = None
+            # return answer
     
         if matches_with_score:
-            answer.answer = matches_with_score[0][0].page_content
-            answer.faq_vectorstore_score = matches_with_score[0][1]
-            answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
-            answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
-            answer.faq_doc = matches_with_score[0][0].metadata['doc']
-            if stream_json:
-                answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
-                answer.references["id"] = trace_id
-            else:
-                answer.references = matches_with_score[0][0].metadata['references']
-            answer.trace_id = trace_id
-            answer.faq_match_question = matches_with_score[0][0].metadata['question']
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
+            answer.faq_vectorstore_score = matches_with_score[0][1]
 
-            questions = []
-            if answer.faq_vectorstore_score > 0.9 and follow_on_questions:
-                category_filter = self.category_filter_get(state_category, designation_category, topic)
-                _k = 10
-                matches_with_score = self.texts_index.similarity_search_with_score(
-                    answer.question, k=_k, fetch_k=5 * _k,
-                    where_filter=category_filter
-                )
-                matches, scores = self.filter_unique_matches(matches_with_score)
+            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+                if answer.faq_feedback == 'negative':
+                    answer.answer = matches_with_score[0][0].metadata['feedback_answer']
+                    answer.references = matches_with_score[0][0].metadata['feedback_sources']
+                else:
+                    answer.answer = matches_with_score[0][0].page_content
+                    answer.references = matches_with_score[0][0].metadata['references']
 
-                for m in matches:
-                    if isinstance(m.metadata["doc"], str):
-                        m.metadata["doc"] = json.loads(m.metadata["doc"])
-                
-                questions = self.get_followon_questions(answer, matches, max_sources)
+                if stream_json:
+                    answer.references = self.get_reference_dict(answer.references)
+                    answer.references["id"] = trace_id
 
-            answer.follow_on_questions = questions
+                answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
+                answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
+                answer.faq_doc = matches_with_score[0][0].metadata['doc']
+                answer.trace_id = trace_id
+                answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
+                questions = []
+                if follow_on_questions:
+                    category_filter = self.category_filter_get(state_category, designation_category, topic)
+                    _k = 10
+                    matches_with_score = self.texts_index.similarity_search_with_score(
+                        answer.question, k=_k, fetch_k=5 * _k,
+                        where_filter=category_filter
+                    )
+                    matches, scores = self.filter_unique_matches(matches_with_score)
+
+                    for m in matches:
+                        if isinstance(m.metadata["doc"], str):
+                            m.metadata["doc"] = json.loads(m.metadata["doc"])
+                    
+                    questions = self.get_followon_questions(answer, matches, max_sources)
+
+                answer.follow_on_questions = questions
+        
         return answer
 
 
