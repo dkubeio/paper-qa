@@ -1174,6 +1174,47 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         bib = dict()
+        bib_str = [] if stream_json else ""
+        ref_str = '\n\n**References:**\n\n'
+        for i, c in enumerate(answer.contexts):
+            name = c.text.name
+            citation = c.text.doc.citation
+
+            # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
+            #if name_in_text(name, answer_text):
+            #   bib[name] = citationi
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+
+            if c.text.ext_path:
+                if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
+                    url = c.text.ext_path
+                else:
+                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+
+                if stream_json:
+                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+                else:
+                    bib_str += f"\n {i+1}. [{name}]({url})"
+                ref_str += f"\n {i+1}. [{name}]({url})"
+            else:
+                if name != citation:
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {name}: {citation}"
+                    ref_str += f"\n {i+1}. [{name}]({citation})"
+                else:
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {citation}"
+                    ref_str += f"\n {i+1}. [{citation}]()"
+       
+        tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
+        tags['debug_properties']['references'] = ref_str
+        tags = json.dumps(tags)
+        self.llm.model_kwargs['headers']['x-sgpt-tags'] = tags
+
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
                 "I cannot answer this question due to insufficient information."
@@ -1228,37 +1269,37 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = [] if stream_json else ""
-        for i, c in enumerate(answer.contexts):
-            name = c.text.name
-            citation = c.text.doc.citation
+        # bib_str = [] if stream_json else ""
+        # for i, c in enumerate(answer.contexts):
+        #     name = c.text.name
+        #     citation = c.text.doc.citation
 
-            # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
-            #   bib[name] = citationi
-            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+        #     # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
+        #     #if name_in_text(name, answer_text):
+        #     #   bib[name] = citationi
+        #     SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
 
-            if c.text.ext_path:
-                if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
-                    url = c.text.ext_path
-                else:
-                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+        #     if c.text.ext_path:
+        #         if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
+        #             url = c.text.ext_path
+        #         else:
+        #             url = SHARE_POINT_URL + quote(c.text.ext_path)
 
-                if stream_json:
-                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
-                else:
-                    bib_str += f"\n {i+1}. [{name}]({url})"
-            else:
-                if name != citation:
-                    if stream_json:
-                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
-                    else:
-                        bib_str += f"\n {i+1}. {name}: {citation}"
-                else:
-                    if stream_json:
-                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
-                    else:
-                        bib_str += f"\n {i+1}. {citation}"
+        #         if stream_json:
+        #             bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+        #         else:
+        #             bib_str += f"\n {i+1}. [{name}]({url})"
+        #     else:
+        #         if name != citation:
+        #             if stream_json:
+        #                 bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+        #             else:
+        #                 bib_str += f"\n {i+1}. {name}: {citation}"
+        #         else:
+        #             if stream_json:
+        #                 bib_str.append({"rank":i+1, "ref":f"{citation}"})
+        #             else:
+        #                 bib_str += f"\n {i+1}. {citation}"
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
