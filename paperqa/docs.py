@@ -1159,6 +1159,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         trace_id: Optional[str] = None,
         stream_json: Optional[bool] = False,
+        securellm: Optional[bool] = False,
     ) ->  Answer:
         if self.prompts.pre is not None:
             chain = make_chain(
@@ -1209,11 +1210,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     else:
                         bib_str += f"\n {i+1}. {citation}"
                     ref_str += f"\n {i+1}. [{citation}]()"
-       
-        tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
-        tags['debug_properties']['references'] = ref_str
-        tags = json.dumps(tags)
-        self.llm.model_kwargs['headers']['x-sgpt-tags'] = tags
+      
+        if securellm:
+            tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
+            tags['debug_properties']['references'] = ref_str
+            tags = json.dumps(tags)
+            self.llm.model_kwargs['headers']['x-sgpt-tags'] = tags
 
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
