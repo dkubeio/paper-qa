@@ -157,6 +157,7 @@ class Answer(BaseModel):
     context: str = ""
     contexts: List[Context] = []
     references: str = ""
+    ref_dict: dict = {}
     formatted_answer: str = ""
     dockey_filter: Optional[Set[DocKey]] = None
     summary_length: str = "about 200 words"
