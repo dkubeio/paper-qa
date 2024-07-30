@@ -590,7 +590,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = None
 
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
         
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
@@ -636,7 +635,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     }]
                 }
 
-        logging.trace(f"weaviate category filter:{category_filter}")
 
         return category_filter
 
@@ -745,7 +743,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
+            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
+            logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -1031,6 +1031,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
        
+        matches_with_score = []
         try:
             matches_with_score = self.cache_index.similarity_search_with_score(
                 answer.question, k=k, fetch_k=k,
@@ -1039,9 +1040,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         except Exception as e:
             print(f"ERROR: error in searching in cache, {e}")
             answer.faq_vectorstore_score = 0.0
-            matches_with_score = None
             # return answer
-    
+       
+        if not matches_with_score:
+            answer.faq_vectorstore_score = 0.0
+
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
@@ -1081,7 +1084,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     questions = self.get_followon_questions(answer, matches, max_sources)
 
                 answer.follow_on_questions = questions
-        
+       
         return answer
 
 
@@ -1176,6 +1179,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         bib = dict()
         bib_str = [] if stream_json else ""
+        ref_dict = []
         ref_str = '\n\n**References:**\n\n'
         for i, c in enumerate(answer.contexts):
             name = c.text.name
@@ -1197,6 +1201,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 else:
                     bib_str += f"\n {i+1}. [{name}]({url})"
                 ref_str += f"\n {i+1}. [{name}]({url})"
+                ref_dict.append({"rank": i+1,"ref":f"{name}", "url":f"{url}", "doc_source": c.text.doc_source.lower()})
             else:
                 if name != citation:
                     if stream_json:
@@ -1204,16 +1209,19 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     else:
                         bib_str += f"\n {i+1}. {name}: {citation}"
                     ref_str += f"\n {i+1}. [{name}]({citation})"
+                    ref_dict.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}", "doc_source": c.text.doc_source.lower()})
                 else:
                     if stream_json:
                         bib_str.append({"rank":i+1, "ref":f"{citation}"})
                     else:
                         bib_str += f"\n {i+1}. {citation}"
                     ref_str += f"\n {i+1}. [{citation}]()"
+                    ref_dict.append({"rank":i+1, "ref":f"{citation}", "doc_source": c.text.doc_source.lower()})
       
         if securellm:
             tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
             tags['debug_properties']['references'] = ref_str
+            tags['debug_properties']['ref_dict'] = ref_dict 
             tags = json.dumps(tags)
             self.llm.model_kwargs['headers']['x-sgpt-tags'] = tags
 
@@ -1309,6 +1317,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
         answer.references = {"references":bib_str, "id":trace_id} if stream_json else bib_str
+        answer.ref_dict = ref_dict
 
         if self.prompts.post is not None:
             chain = make_chain(
