@@ -743,7 +743,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
+            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topic}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
@@ -1048,7 +1048,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
-
+            
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
