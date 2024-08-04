@@ -15,6 +15,7 @@ from .prompts import (
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
+    rewrite_prompt,
     followup_system_prompt
 )
 
@@ -78,6 +79,7 @@ class PromptCollection(BaseModel):
     cite: PromptTemplate = citation_prompt
     pre: Optional[PromptTemplate] = None
     post: Optional[PromptTemplate] = None
+    rewrite: PromptTemplate = rewrite_prompt
     system: str = default_system_prompt
     skip_summary: bool = False
 
@@ -171,6 +173,10 @@ class Answer(BaseModel):
     faq_doc: Optional[Doc] = None
     faq_match_question: Optional[str]=None
     follow_on_questions: Optional[List[str]] = None
+    metadata: Optional[Dict[str, str]] = None
+    derived_question: str = ""
+    finline_response: bool = False
+
 
     def __str__(self) -> str:
         """Return the answer as a string."""

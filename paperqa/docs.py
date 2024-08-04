@@ -1134,6 +1134,69 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
+    async def rewrite_query(
+        self,
+        query: str,
+        get_callbacks: CallbackFactory = lambda x: None,
+        trace_id: Optional[str] = None,
+        state_category: Optional[Tuple[str]] = None,
+        designation_category: Optional[Tuple[str]] = None,
+        topic: Optional[Tuple[str]] = None,
+    ) ->  dict:  
+
+        answer = Answer(question=query)
+        answer.trace_id = trace_id
+        answer.finline_response = True
+        rewrite_chain = make_chain(
+            self.prompts.rewrite,
+            cast(BaseLanguageModel, self.llm),
+            memory=self.memory_model,
+            system_prompt=self.prompts.system,
+        )
+        start_time = datetime.now()
+        derived_ctx = ""
+        try:
+            derived_ctx = await rewrite_chain.arun(
+                scenario=query,
+                json_format="[{'question': '...','group': '...','topic': '...'}, {'question': '...','group': '...','topic': '...'}]"
+                #callbacks=get_callbacks("rewrite"),
+            )
+        except Exception as e:
+            answer_text = str(e)
+            logging.trace(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
+            answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+            #answer.question = "n/a"
+            return answer
+
+        end_time = datetime.now()
+
+        logging.trace(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
+        logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
+        try: 
+            if derived_ctx != "":
+                derived = eval(derived_ctx)
+                nquestions = len(derived)
+                if nquestions > 1:
+                    answer.finline_response = True
+                    # This involves multiple questions. I will not answer for now.
+                    answer.answer =f"\nYou asked a coumpound question which contains {nquestions} subquestions. These are listed as Followup questions below. "\
+                                    "Please ask Agent Assist one of the Followup questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
+                    answer.follow_on_questions = []
+                    for q in derived:
+                        answer.follow_on_questions.append(q['question'])
+                elif nquestions == 1:
+                    answer.question = answer.derived_question = derived[0]['question']
+                    answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
+                    answer.finline_response = False
+                else:
+                    answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+                return answer
+        except Exception as e:
+            answer_text = str(e)
+            logging.trace(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
+            answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+        return answer
+
 
     async def aquery(
         self,
