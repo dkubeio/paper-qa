@@ -1179,7 +1179,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if nquestions > 1:
                     answer.finline_response = True
                     # This involves multiple questions. I will not answer for now.
-                    answer.answer =f"\nYou asked a coumpound question which contains {nquestions} subquestions. These are listed as Followup questions below. "\
+                    answer.answer =f"\nYou asked a compound question which contains {nquestions} subquestions. These are listed as Followup questions below. "\
                                     "Please ask Agent Assist one of the Followup questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
                     answer.follow_on_questions = []
                     for q in derived:
