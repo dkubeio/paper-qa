@@ -1158,7 +1158,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         try:
             derived_ctx = await rewrite_chain.arun(
                 scenario=query,
-                json_format="[{'question': '...','group': '...','topic': '...'}, {'question': '...','group': '...','topic': '...'}]"
+                json_format='[{"question": "...","group": "...","topic": "..."}, {"question": "...","group": "...","topic": "..."}]'
                 #callbacks=get_callbacks("rewrite"),
             )
         except Exception as e:
