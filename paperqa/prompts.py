@@ -186,8 +186,8 @@ rewrite_prompt = PromptTemplate(
     input_variables=["scenario", "json_format"],
     template="You are an expert Call Center Agent Assist in the public healthcare insurance marketplace. "
     "Your job is to analyze a customer scenario, derive all the policy or procedure subquestions and classify the questions based on some criteria below. "
-    "list each question separately in the json format {json_format} in a json list."
-    "Strictly follow this format and do not include any other text: "
+    "list each question separately as specified in the json format {json_format} in a single json list."
+    "Strictly follow this format and do not include any other text, explanation or notes "
     "If the scenario is ambiguous and doesn't describe any question, please return n/a for question, otherwise proceed with the classification of question. "
     "The derived subquestions should be relevant and as generic as possible and should not be very specific to the user's specific scenario. "
     "If a question can't be derived, please fill n/a for question, otherwise proceed with classifying the question. "

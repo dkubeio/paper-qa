@@ -723,7 +723,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        follow_on_questions: Optional[List[str]] = None,
+        follow_on_questions: Optional[bool] = False,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -1174,6 +1174,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
         try: 
             if derived_ctx != "":
+                import re
+                # Use regex to find the first section enclosed in square brackets
+                pattern = re.compile(r'\[.*?\]', re.DOTALL)
+                match = pattern.search(derived_ctx)
+
+                if match:
+                    derived_ctx = match.group(0)
+                else:
+                    # Use the original question. No rewrite
+                    answer.finline_response = False
+                    return answer
+
                 derived = eval(derived_ctx)
                 nquestions = len(derived)
                 if nquestions > 1:
