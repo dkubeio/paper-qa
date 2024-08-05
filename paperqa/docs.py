@@ -1058,6 +1058,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     answer.references = matches_with_score[0][0].metadata['references']
 
                 if stream_json:
+                    answer.ref_str = answer.references
                     answer.references = self.get_reference_dict(answer.references)
                     answer.references["id"] = trace_id
 
