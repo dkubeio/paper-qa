@@ -1164,8 +1164,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         except Exception as e:
             answer_text = str(e)
             logging.trace(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
-            answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+            #answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
             #answer.question = "n/a"
+            answer.finline_response = False
             return answer
 
         end_time = datetime.now()
@@ -1197,7 +1198,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     for q in derived:
                         answer.follow_on_questions.append(q['question'])
                 elif nquestions == 1:
-                    answer.question = answer.derived_question = derived[0]['question']
+                    answer.question = derived[0]['question']
                     answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
                     answer.finline_response = False
                 else:
