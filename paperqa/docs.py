@@ -363,8 +363,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         if doc.docname in self.docnames:
             new_docname = self._get_unique_name(doc.docname)
-            for t in texts:
-                t.name = t.name.replace(doc.docname, new_docname)
+            if not sllm_qna:
+                for t in texts:
+                    t.name = t.name.replace(doc.docname, new_docname)
             doc.docname = new_docname
 
         if texts[0].embeddings is None:
@@ -588,8 +589,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Optional[Tuple[str]] = None):
         category_filter = None
 
-        logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topics}")
 
+        
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
             if "Broker" in designation_category:
@@ -634,7 +635,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     }]
                 }
 
-        logging.trace(f"weaviate category filter:{category_filter}")
 
         return category_filter
 
@@ -743,7 +743,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
+            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topic}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
+            logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
@@ -1028,42 +1030,62 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
-        
-        matches_with_score = self.cache_index.similarity_search_with_score(
-            answer.question, k=k, fetch_k=k,
-            where_filter=category_filter
-        )
-
-        answer.answer = matches_with_score[0][0].page_content
-        answer.faq_vectorstore_score = matches_with_score[0][1]
-        answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
-        answer.faq_doc = matches_with_score[0][0].metadata['doc']
-        if stream_json:
-            answer.references = self.get_reference_dict(matches_with_score[0][0].metadata['references'])
-            answer.references["id"] = trace_id
-        else:
-            answer.references = matches_with_score[0][0].metadata['references']
-        answer.trace_id = trace_id
-        answer.faq_match_question = matches_with_score[0][0].metadata['question']
-
-        questions = []
-        if answer.faq_vectorstore_score > 0.9 and follow_on_questions:
-            category_filter = self.category_filter_get(state_category, designation_category, topic)
-            _k = 10
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
+       
+        matches_with_score = []
+        try:
+            matches_with_score = self.cache_index.similarity_search_with_score(
+                answer.question, k=k, fetch_k=k,
                 where_filter=category_filter
             )
-            matches, scores = self.filter_unique_matches(matches_with_score)
+        except Exception as e:
+            print(f"ERROR: error in searching in cache, {e}")
+            answer.faq_vectorstore_score = 0.0
+            # return answer
+       
+        if not matches_with_score:
+            answer.faq_vectorstore_score = 0.0
 
-            for m in matches:
-                if isinstance(m.metadata["doc"], str):
-                    m.metadata["doc"] = json.loads(m.metadata["doc"])
+        if matches_with_score:
+            answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
+            answer.faq_vectorstore_score = matches_with_score[0][1]
             
-            questions = self.get_followon_questions(answer, matches, max_sources)
+            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+                if answer.faq_feedback == 'negative':
+                    answer.answer = matches_with_score[0][0].metadata['feedback_answer']
+                    answer.references = matches_with_score[0][0].metadata['feedback_sources']
+                else:
+                    answer.answer = matches_with_score[0][0].page_content
+                    answer.references = matches_with_score[0][0].metadata['references']
 
-        answer.follow_on_questions = questions
+                if stream_json:
+                    answer.ref_str = answer.references
+                    answer.references = self.get_reference_dict(answer.references)
+                    answer.references["id"] = trace_id
 
+                answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
+                answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
+                answer.faq_doc = matches_with_score[0][0].metadata['doc']
+                answer.trace_id = trace_id
+                answer.faq_match_question = matches_with_score[0][0].metadata['question']
+
+                questions = []
+                if follow_on_questions:
+                    category_filter = self.category_filter_get(state_category, designation_category, topic)
+                    _k = 10
+                    matches_with_score = self.texts_index.similarity_search_with_score(
+                        answer.question, k=_k, fetch_k=5 * _k,
+                        where_filter=category_filter
+                    )
+                    matches, scores = self.filter_unique_matches(matches_with_score)
+
+                    for m in matches:
+                        if isinstance(m.metadata["doc"], str):
+                            m.metadata["doc"] = json.loads(m.metadata["doc"])
+                    
+                    questions = self.get_followon_questions(answer, matches, max_sources)
+
+                answer.follow_on_questions = questions
+       
         return answer
 
 
@@ -1217,6 +1239,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         get_callbacks: CallbackFactory = lambda x: None,
         trace_id: Optional[str] = None,
         stream_json: Optional[bool] = False,
+        securellm: Optional[bool] = False,
     ) ->  Answer:
         if self.prompts.pre is not None:
             chain = make_chain(
@@ -1232,6 +1255,53 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
         bib = dict()
+        bib_str = [] if stream_json else ""
+        ref_dict = []
+        ref_str = '\n\n**References:**\n\n'
+        for i, c in enumerate(answer.contexts):
+            name = c.text.name
+            citation = c.text.doc.citation
+
+            # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
+            #if name_in_text(name, answer_text):
+            #   bib[name] = citationi
+            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+
+            if c.text.ext_path:
+                if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
+                    url = c.text.ext_path
+                else:
+                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+
+                if stream_json:
+                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+                else:
+                    bib_str += f"\n {i+1}. [{name}]({url})"
+                ref_str += f"\n {i+1}. [{name}]({url})"
+                ref_dict.append({"rank": i+1,"ref":f"{name}", "url":f"{url}", "doc_source": c.text.doc_source.lower()})
+            else:
+                if name != citation:
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {name}: {citation}"
+                    ref_str += f"\n {i+1}. [{name}]({citation})"
+                    ref_dict.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}", "doc_source": c.text.doc_source.lower()})
+                else:
+                    if stream_json:
+                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
+                    else:
+                        bib_str += f"\n {i+1}. {citation}"
+                    ref_str += f"\n {i+1}. [{citation}]()"
+                    ref_dict.append({"rank":i+1, "ref":f"{citation}", "doc_source": c.text.doc_source.lower()})
+      
+        if securellm:
+            tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
+            tags['debug_properties']['references'] = ref_str
+            tags['debug_properties']['ref_dict'] = ref_dict 
+            tags = json.dumps(tags)
+            self.llm.model_kwargs['headers']['x-sgpt-tags'] = tags
+
         if len(answer.context) < 10 and not self.memory:
             answer_text = (
                 "I cannot answer this question due to insufficient information."
@@ -1286,37 +1356,37 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
 
-        bib_str = [] if stream_json else ""
-        for i, c in enumerate(answer.contexts):
-            name = c.text.name
-            citation = c.text.doc.citation
+        # bib_str = [] if stream_json else ""
+        # for i, c in enumerate(answer.contexts):
+        #     name = c.text.name
+        #     citation = c.text.doc.citation
 
-            # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
-            #   bib[name] = citationi
-            SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
+        #     # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
+        #     #if name_in_text(name, answer_text):
+        #     #   bib[name] = citationi
+        #     SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
 
-            if c.text.ext_path:
-                if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
-                    url = c.text.ext_path
-                else:
-                    url = SHARE_POINT_URL + quote(c.text.ext_path)
+        #     if c.text.ext_path:
+        #         if c.text.doc_source.lower() == 'external' or c.text.ext_path.startswith('http'):
+        #             url = c.text.ext_path
+        #         else:
+        #             url = SHARE_POINT_URL + quote(c.text.ext_path)
 
-                if stream_json:
-                    bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
-                else:
-                    bib_str += f"\n {i+1}. [{name}]({url})"
-            else:
-                if name != citation:
-                    if stream_json:
-                        bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
-                    else:
-                        bib_str += f"\n {i+1}. {name}: {citation}"
-                else:
-                    if stream_json:
-                        bib_str.append({"rank":i+1, "ref":f"{citation}"})
-                    else:
-                        bib_str += f"\n {i+1}. {citation}"
+        #         if stream_json:
+        #             bib_str.append({"rank": i+1,"ref":f"{name}", "url":f"{url}"})
+        #         else:
+        #             bib_str += f"\n {i+1}. [{name}]({url})"
+        #     else:
+        #         if name != citation:
+        #             if stream_json:
+        #                 bib_str.append({"rank":i+1, "ref":f"{name}", "citation": f"{citation}"})
+        #             else:
+        #                 bib_str += f"\n {i+1}. {name}: {citation}"
+        #         else:
+        #             if stream_json:
+        #                 bib_str.append({"rank":i+1, "ref":f"{citation}"})
+        #             else:
+        #                 bib_str += f"\n {i+1}. {citation}"
 
         formatted_answer = f"Question: {answer.question}\n\n{answer_text}\n"
         if len(bib) > 0:
@@ -1324,6 +1394,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.answer = answer_text
         answer.formatted_answer = formatted_answer
         answer.references = {"references":bib_str, "id":trace_id} if stream_json else bib_str
+        answer.ref_dict = ref_dict
 
         if self.prompts.post is not None:
             chain = make_chain(

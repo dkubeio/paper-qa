@@ -70,6 +70,8 @@ class Faq_Text(BaseModel):
     embeddings: Optional[List[float]] = None
     date: Optional[str] = None
     feedback: Optional[str] = None
+    feedback_answer: Optional[str] = None
+    feedback_sources: Optional[str] = None
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
@@ -157,6 +159,8 @@ class Answer(BaseModel):
     context: str = ""
     contexts: List[Context] = []
     references: str = ""
+    ref_dict: dict = {}
+    ref_str: str = '' 
     formatted_answer: str = ""
     dockey_filter: Optional[Set[DocKey]] = None
     summary_length: str = "about 200 words"
@@ -170,8 +174,10 @@ class Answer(BaseModel):
     trace_id: Optional[str] = None
     faq_vectorstore_score: Optional[float] = None
     faq_vector_id: Optional[str] = ''
+    parent_req_id: Optional[str] = ''
     faq_doc: Optional[Doc] = None
     faq_match_question: Optional[str]=None
+    faq_feedback: Optional[str]=None
     follow_on_questions: Optional[List[str]] = None
     metadata: Optional[Dict[str, str]] = None
     finline_response: bool = False
