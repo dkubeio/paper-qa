@@ -419,15 +419,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding faq embeddings")
 
-        if self.doc_index is not None:
+        if self.doc_index is not None and not sllm_qna:
             #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
             self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
 
-        self.docs[doc.dockey] = doc
-        if self.texts_index is None:
-            self.texts += texts
+            self.docs[doc.dockey] = doc
+            if self.texts_index is None:
+                self.texts += texts
 
-        self.docnames.add(doc.docname)
+            self.docnames.add(doc.docname)
 
         return True
 
@@ -724,6 +724,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
         follow_on_questions: Optional[bool] = False,
+        rewritten_query: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -748,36 +749,54 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             logging.trace(f"weaviate category filter:{category_filter}")
             logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
 
-            matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
-                where_filter=category_filter
-            )
-            logging.trace(f"length of matches with score: {len(matches_with_score)}")
-            end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+            def get_matches_scores(vector_index, query):
+                matches_with_score = vector_index.similarity_search_with_score(
+                    query, k=_k, fetch_k=5 * _k,
+                    where_filter=category_filter
+                )
+                logging.trace(f"length of matches with score: {len(matches_with_score)}")
+                end_time = datetime.now()
+                logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
-            # matches_with_score is a list of tuples (doc, score)
-            # fetch all the scores in a list, sort them in descending order
+                # matches_with_score is a list of tuples (doc, score)
+                # fetch all the scores in a list, sort them in descending order
 
-            matches, scores = self.filter_unique_matches(matches_with_score)
+                matches, scores = self.filter_unique_matches(matches_with_score)
 
-            rank = 1
-            for m, score in zip(matches, scores):
-                vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
-                              f" doc:{json.loads(m.metadata['doc'])['docname']}"
-                              f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
-                rank += 1
+                rank = 1
+                for m, score in zip(matches, scores):
+                    vector_id = m.metadata["_additional"]["id"]
+                    logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                                  f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                                  f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+                    rank += 1
 
-        for m in matches:
-            if isinstance(m.metadata["doc"], str):
-                m.metadata["doc"] = json.loads(m.metadata["doc"])
+                for m in matches:
+                    if isinstance(m.metadata["doc"], str):
+                        m.metadata["doc"] = json.loads(m.metadata["doc"])
 
-        questions = []
-        if follow_on_questions:
-            questions = self.get_followon_questions(answer, matches, max_sources)
+                tuple_list = []
+                for m, score in zip(matches, scores):
+                    vector_id = m.metadata["_additional"]["id"]
+                    logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                                  f" doc:{(m.metadata['doc'])['docname']}"
+                                  f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+                    rank += 1
+                    tuple_list.append((m,score))
+                
+                return matches, scores, tuple_list
 
-        answer.follow_on_questions = questions
+            
+            query_matches, query_scores, query_tuple_list = get_matches_scores(self.texts_index, answer.question)
+            if rewritten_query:
+                rewritten_query_matches, rewritten_query_scores, rewritten_query_tuple_list = get_matches_scores(self.texts_index, rewritten_query)
+            else:
+                rewritten_query_matches, rewritten_query_scores, rewritten_query_tuple_list = [], [], []
+        # questions = []
+        # if follow_on_questions:
+        #     questions = self.get_followon_questions(answer, matches, max_sources)
+
+        # answer.follow_on_questions = questions
 
         # ok now filter
         #if answer.dockey_filter is not None:
@@ -788,19 +807,32 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         #    ]
 
         # check if it is deleted
-        matches = [
-            m
-            for m in matches
-            if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
-        ]
+        # matches = [
+        #     m
+        #     for m in matches
+        #     if m.metadata["doc"]["dockey"] not in self.deleted_dockeys
+        # ]
 
         # check if it is already in answer
-        cur_names = [c.text.name for c in answer.contexts]
-        matches = [m for m in matches if m.metadata["name"] not in cur_names]
+        # cur_names = [c.text.name for c in answer.contexts]
+        # matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        matches = matches[:max_sources]
+        # matches = matches[:max_sources]
+       
+        def get_score(match_with_score):
+            return match_with_score[1]
+
+        complete_list = query_tuple_list + rewritten_query_tuple_list
+        sorted_list = sorted(complete_list, key=get_score, reverse=True)
         
+        matches_and_scores = [ [ m[0] for m in sorted_list ], [ m[1] for m in sorted_list ] ]
+        matches = matches_and_scores[0][:max_sources]
+        scores = matches_and_scores[1][:max_sources]
+        
+        # matches = query_matches[:max_sources] + rewritten_query_matches[:max_sources]
+        # scores = query_scores[:max_sources] + rewritten_query_scores[:max_sources]
+        print(len(matches), len(scores))
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -1109,6 +1141,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
         stream_json: Optional[bool] = False,
+        rewritten_query: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1152,6 +1185,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     designation_category=designation_category,
                     topic=topic,
                     follow_on_questions=follow_on_questions,
+                    rewritten_query=rewritten_query,
                 )
 
         return answer
