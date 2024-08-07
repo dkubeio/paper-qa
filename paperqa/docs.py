@@ -792,11 +792,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 rewritten_query_matches, rewritten_query_scores, rewritten_query_tuple_list = get_matches_scores(self.texts_index, rewritten_query)
             else:
                 rewritten_query_matches, rewritten_query_scores, rewritten_query_tuple_list = [], [], []
-        # questions = []
+        questions = []
         # if follow_on_questions:
         #     questions = self.get_followon_questions(answer, matches, max_sources)
 
-        # answer.follow_on_questions = questions
+        answer.follow_on_questions = questions
 
         # ok now filter
         #if answer.dockey_filter is not None:
@@ -832,7 +832,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         
         # matches = query_matches[:max_sources] + rewritten_query_matches[:max_sources]
         # scores = query_scores[:max_sources] + rewritten_query_scores[:max_sources]
-        print(len(matches), len(scores))
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
