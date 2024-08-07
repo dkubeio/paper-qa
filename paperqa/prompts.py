@@ -46,12 +46,14 @@ summary_prompt = PromptTemplate(
     "Output:\n\n",
 )
 
-qa_prompt = PromptTemplate(
+qa_prompt_old = PromptTemplate(
     input_variables=["context", "answer_length", "question"],
     template="Write an answer in {answer_length} "
     "for the question below based on the provided context. "
     "If the context provides insufficient information and the question cannot be directly answered, "
     'reply "I cannot answer". '
+    "You don't need to directly answer the question. If it is a policy related question, explain the policy "
+    "If the question is asking for a procedure, answer the process "
     "For each part of your answer, indicate which sources most support it "
     "via valid citation markers at the end of sentences, like (Example2012). \n"
     "Include confidence score of the generated answer on the scale of 1 to 10 \n"
@@ -61,6 +63,27 @@ qa_prompt = PromptTemplate(
     "Answer: ",
 )
 
+qa_prompt = PromptTemplate(
+    input_variables=["context", "answer_length", "question"],
+    template="You are an expert Call Center Agent Assist in the public healthcare insurance marketplace. "
+    "Your job is to extract relevant context for the user's question. "
+    "Never directly answer yes or no, but only provide policy or procedural information from relevant sections "
+    "If the context doesn't provide answer, but provides policy for a part of the question, state the policy. "
+    "Do not assume anything. Use the context and not any prior learnings. "
+    "Please limit the output to 100 words. "
+    "Please do not include any explanatory logic or notes. "
+    "For each part of your answer, indicate which sources most support it "
+    "via valid citation markers at the end of sentences, like (Example2012). "
+    "Include sources used at the end of the response"
+    "Include confidence score of the generated summary on the scale of 1 to 10 \n"
+    "Do not explain Confidence score. \n"
+    "If the context provides sufficient information reply strictly in the format; Answer: ...\n Sources: ...\n Confidence score: ... "
+    "If the context provides insufficient information reply `I cannot answer, Please escalte to supervisor or rephrase the question` and don't provide any logic for deriving this conclusion. "
+    "Context (with relevance scores):\n {context}\n"
+    "Question: {question}\n"
+)
+    #"Answer: "
+    #"Sources: ",
 # qa_prompt = PromptTemplate(
 #     input_variables=["context", "answer_length", "question", "json_format"],
 #     template="You are an expert Call Center Assistant for Health Insurance market. \n"
@@ -156,4 +179,37 @@ followup_system_prompt = PromptTemplate(
     "Don't write anything except the question."
     "Question:  {question}\n\n"
     "Chat: Question: {previous_question}",
+)
+#"Respond in a JSON format as specified below {json_format}. Strictly follow this format and do not include any other text: "
+#   "where question is derived from the scenario, group and topic are derived by classifying the derived question. "
+rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    template="You are an expert Call Center Agent Assist in the public healthcare insurance marketplace. "
+    "Your job is to analyze a customer scenario, derive all the policy or procedure subquestions and classify the questions based on some criteria below. "
+    "list each question separately as specified in the json format {json_format} and combine them into a single json list. "
+    "Each element in the json list should be a json object with 3 key/value pairs, where the keys are question, group and topic. "
+    "Strictly follow this format and do not include any other text, explanation or notes "
+    "If the scenario is ambiguous and doesn't describe any question, please return n/a for question, otherwise proceed with the classification of question. "
+    "The derived subquestions should be relevant and as generic as possible and should not be very specific to the user's specific scenario. "
+    "Copy the expansion for acronyms from the scenario. You must not expand from your memory"
+    "If a question can't be derived, please fill n/a for question, otherwise proceed with classifying the question. "
+    "The classification involves identifying the high level group and a topic within the group for each subquestion. "
+    "The group and topic mapping is described below in `classification_criteria`. "
+    "If any question can't be derived, please fill n/a for question, group and topic. "
+    "Follow the style and tone of the example_questions specified below. Don't answer example questions. "
+    "Please do not forcefit a question if the intent in the scenario is ambiguous and doesn't describe a question. \n\n"
+    "example_questions: [ "
+        "What do I need to do if a customer is getting an application loop?,"
+        "How do I unlock an account?,"
+        "What documents are needed to verify citizenship?,"
+        "How much time does a consumer have to submit an ROP reinstatement request after notice?"
+    "]"
+    "classification_criteria:[ {{'group': 'Tech Aupport, 'topics: ['application updates', 'account creation', 'account unlock', 'password reset', 'account reclaim/access', 'ticket creation', 'consumer portal issues', 'Auth & DUO']}}, "
+    "{{'group': 'DMI (Data Mismatch Issues)', 'topics':['income sources', 'medicare PDM (Periodic Data Matching', 'ROP(Reasonable Opportunity Period) - APTC (Advance Premium Tax Credit) issues', 'documentation mismatch' ]}}, "
+    "{{'group': 'Eligibility', 'topics' : ['Medicare', 'Medicaid', 'Financial Assistance (APTC,CSR)', 'Qualified Health Plan (QHP)', 'Federal Tax Return (FTR)', 'Affordability rules and estimates', 'QLE/SEP']}}, "
+    "{{'group': 'Account', 'topics' : ['Account Transfer', 'Application submission', 'Remote Identity Proofing (RIDP)', 'Income change', 'address change', 'demographic change']}}, "
+    "{{'group': 'Enrollment assistance', 'topics': ['Reinstatement', 'Retroactive Voluntary termination/cancellation ', 'Prospective voluntary termination/cancellation', 'Financial assistance (APTC/CSR)', 'Coverage effective dates', 'Plan Selection', 'Plan Change', 'Binder payment', 'Enrollment finalizing', 'Net premium change', 'Enrollment Discrepancy with Carrier', 'Renewal', 'Id cards/billing payment']}}, "
+    "{{'group': 'Miscellaneous', 'topics': [ '1095-A', 'Complaint', 'Appeal', 'Supervisor call request', 'Assister/Broker Training', 'Assister/Broker profile changes' , 'Assistant/Broker Designation', 'Assistant/Broker BOB']}}]\n\n"
+    
+    "scenario: {scenario}\n\n",
 )
