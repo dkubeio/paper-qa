@@ -178,7 +178,7 @@ class Answer(BaseModel):
     faq_doc: Optional[Doc] = None
     faq_match_question: Optional[str]=None
     faq_feedback: Optional[str]=None
-    follow_on_questions: Optional[List[str]] = None
+    follow_on_questions: Optional[List[str]] = []
     metadata: Optional[Dict[str, str]] = None
     finline_response: bool = False
 
