@@ -42,6 +42,10 @@ from .utils import (
 )
 
 
+class NoMatchesFoundException(Exception):
+    pass
+
+
 class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     """A collection of documents to be used for answering questions."""
 
@@ -756,13 +760,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
+            if not matches_with_score:
+                raise NoMatchesFoundException("No matches found for the given query")
+
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
 
             matches, scores = self.filter_unique_matches(matches_with_score)
 
             rank = 1
-            for m, score in zip(matches, scores):
+            for m, score in zip(matches[:max_sources], scores[:max_sources]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
