@@ -42,6 +42,10 @@ from .utils import (
 )
 
 
+class NoMatchesFoundException(Exception):
+    pass
+
+
 class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     """A collection of documents to be used for answering questions."""
 
@@ -755,6 +759,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             logging.trace(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
             logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+
+            if not matches_with_score:
+                raise NoMatchesFoundException("No matches found for the given query")
 
             # matches_with_score is a list of tuples (doc, score)
             # fetch all the scores in a list, sort them in descending order
