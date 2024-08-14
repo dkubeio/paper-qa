@@ -769,7 +769,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             matches, scores = self.filter_unique_matches(matches_with_score)
 
             rank = 1
-            for m, score in zip(matches[:max_sources], scores[:max_sources]):
+            num_of_log_entries = 10
+            for m, score in zip(matches[:num_of_log_entries], scores[:num_of_log_entries]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
@@ -1347,7 +1348,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
 
             try:
-                logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+                # logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
