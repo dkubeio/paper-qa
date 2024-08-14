@@ -183,7 +183,7 @@ class Answer(BaseModel):
     follow_on_questions: Optional[List[str]] = None
     metadata: Optional[Dict[str, str]] = None
     finline_response: bool = False
-
+    validated: bool = False
 
     def __str__(self) -> str:
         """Return the answer as a string."""
