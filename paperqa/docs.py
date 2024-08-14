@@ -1056,6 +1056,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
+            answer.validated = matches_with_score[0][0].metadata['validated']
             
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
                 if answer.faq_feedback == 'negative':
