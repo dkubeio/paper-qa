@@ -72,6 +72,7 @@ class Faq_Text(BaseModel):
     feedback: Optional[str] = None
     feedback_answer: Optional[str] = None
     feedback_sources: Optional[str] = None
+    feedback_reason: Optional[str] = None
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
