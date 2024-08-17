@@ -81,6 +81,7 @@ qa_prompt = PromptTemplate(
     "If the context provides insufficient information reply `I cannot answer, Please escalate to supervisor or rephrase the question` and don't provide any logic for deriving this conclusion. "
     "Context (with relevance scores):\n {context}\n"
     "Question: {question}\n"
+    "Answer: ",
 )
     #"Answer: "
     #"Sources: ",
