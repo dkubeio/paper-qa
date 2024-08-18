@@ -488,6 +488,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = self.doc_index.max_marginal_relevance_search(
             query, k=k + len(self.deleted_dockeys)
         )
+
+        # temporary work for fm-controller crash. Need to be removed.
+        # Need to update the doc index when ever it changes in the dataset
+        # but for now we are doing it here.
+        matches = []
         # filter the matches
         matches = [
             m for m in matches if m.metadata["dockey"] not in self.deleted_dockeys
