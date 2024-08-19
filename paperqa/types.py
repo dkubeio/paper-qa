@@ -72,6 +72,8 @@ class Faq_Text(BaseModel):
     feedback: Optional[str] = None
     feedback_answer: Optional[str] = None
     feedback_sources: Optional[str] = None
+    feedback_reason: Optional[str] = None
+    validated: Optional[bool] = False
 
 class PromptCollection(BaseModel):
     summary: PromptTemplate = summary_prompt
@@ -181,7 +183,7 @@ class Answer(BaseModel):
     follow_on_questions: Optional[List[str]] = None
     metadata: Optional[Dict[str, str]] = None
     finline_response: bool = False
-
+    validated: Optional[bool] = False
 
     def __str__(self) -> str:
         """Return the answer as a string."""
