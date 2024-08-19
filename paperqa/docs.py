@@ -423,15 +423,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding faq embeddings")
 
-        if self.doc_index is not None:
-            #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
-            self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+        if not sllm_qna:
+            if self.doc_index is not None:
+                #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+                self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
 
-        self.docs[doc.dockey] = doc
-        if self.texts_index is None:
-            self.texts += texts
+            self.docs[doc.dockey] = doc
+            if self.texts_index is None:
+                self.texts += texts
 
-        self.docnames.add(doc.docname)
+            self.docnames.add(doc.docname)
 
         return True
 
@@ -1303,7 +1304,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         bib_str += f"\n {i+1}. {citation}"
                     ref_str += f"\n {i+1}. [{citation}]()"
                     ref_dict.append({"rank":i+1, "ref":f"{citation}", "doc_source": c.text.doc_source.lower()})
-      
+        
+        answer.ref_str = ref_str
         if securellm:
             tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
             tags['debug_properties']['references'] = ref_str
