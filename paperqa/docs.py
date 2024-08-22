@@ -844,7 +844,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.summary,
                 self.summary_llm,
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state],
             )
             # This is dangerous because it
             # could mask errors that are important- like auth errors
@@ -1164,6 +1164,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
+ 
+        
     async def rewrite_query(
         self,
         query: str,
@@ -1174,29 +1176,38 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         topic: Optional[Tuple[str]] = None,
     ) ->  dict:  
 
-        answer = Answer(question=query)
+        CONFIDENCE_THRESHOLD = 8 #out of 10 for a rewrite
+        def remove_suffix(text, match):
+            index = text.rfind(match)
+            if index == -1:
+                return text
+            else:
+                return text[:index].strip()
+        answer = Answer(question=query.strip())
         answer.trace_id = trace_id
-        answer.finline_response = True
+        answer.finline_response = False
+        answer.state = state_category[0] if state_category else 'General'
+        if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+            answer.question = remove_suffix(answer.question, "/norewrite")
+            return answer
         rewrite_chain = make_chain(
             self.prompts.rewrite,
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
-            system_prompt=self.prompts.system,
+            system_prompt=self.prompts.system[answer.state],
         )
         start_time = datetime.now()
         derived_ctx = ""
         try:
             derived_ctx = await rewrite_chain.arun(
                 scenario=query,
-                json_format='[{"question": "...","group": "...","topic": "..."}, {"question": "...","group": "...","topic": "..."}]'
+                json_format='[{"question": "...","group": "...","topic": "...", "confidence_score": "..."}, {"question": "...","group": "...","topic": "...", "confidence_score": "..."}]'
                 #callbacks=get_callbacks("rewrite"),
             )
         except Exception as e:
             answer_text = str(e)
             logging.trace(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
-            #answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
-            #answer.question = "n/a"
-            answer.finline_response = False
+            # rewrite format failures: Use the original question
             return answer
 
         end_time = datetime.now()
@@ -1213,31 +1224,91 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if match:
                     derived_ctx = match.group(0)
                 else:
-                    # Use the original question. No rewrite
-                    answer.finline_response = False
+                    # rewrite formal failures: Use the original question. No rewrite
                     return answer
 
                 derived = eval(derived_ctx)
                 nquestions = len(derived)
-                if nquestions > 1:
+                if nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD:
+                    # can't answer
                     answer.finline_response = True
-                    # This involves multiple questions. I will not answer for now.
-                    answer.answer =f"\nYou asked a compound question which contains {nquestions} subquestions. These are listed as Followup questions below. "\
-                                    "Please ask Agent Assist one of the Followup questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
+                    answer.answer =f"\nThe original question is ambiguous. The suggested questions are given below as Followup questions. "\
+                                    "Please ask Agent Assist one of these questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
                     answer.follow_on_questions = []
                     for q in derived:
-                        answer.follow_on_questions.append(q['question'])
+                        if q['confidence_score'] >= CONFIDENCE_THRESHOLD:
+                            answer.follow_on_questions.append(q['question'])
+                    if len(answer.follow_on_questions) == 0:
+                        answer.answer =f"\nI can't answer that question. Please rephrase or escalate"
+                        answer.follow_on_questions = None
+                    return answer
+                if nquestions > 2:
+                    if answer.question.startswith(('What', 'what', 'How', 'how')):
+                        # Question is mostly formatted. Use the original question
+                        # Rewritten ones are sent as followon questions
+                        pass
+                    else:
+                        # Compounded question
+                        answer.finline_response = True
+                        # This involves multiple questions. I will not answer for now.
+                        answer.answer =f"\nThe original question is ambiguous. The suggested questions are given below as Followup questions. "\
+                                    "Please ask Agent Assist one of these questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
+                    answer.follow_on_questions = []
+                    for q in derived:
+                        if q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
+                            answer.question != q['question']:
+                            answer.follow_on_questions.append(q['question'])
+ 
+                elif nquestions == 2:
+                    # Higher precendence to How to questions.
+                    if answer.question.startswith(('What', 'what', 'How', 'how')):
+                        # Question is mostly formatted. Use the original question
+                        # Rewritten ones are sent as followon questions
+                        answer.follow_on_questions = []
+                        for q in derived:
+                            if q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
+                                answer.question != q['question']:
+                                answer.follow_on_questions.append(q['question'])
+                    else:
+                        # Prefer How question over What?
+                        #qi = 0
+                        #if derived[0]['question'].startswith('How to'):
+                        #    qi = 0
+                        #elif derived[1]['question'].startswith('How to'):
+                        #    qi = 1
+                    
+                        #answer.follow_on_questions = [derived[(qi+1)&1]['question']]
+                        #answer.question = derived[qi]['question']
+
+                        if answer.question != derived[1]['question']:
+                            answer.follow_on_questions = [derived[1]['question']]
+                        answer.question = derived[0]['question']
                 elif nquestions == 1:
                     answer.question = derived[0]['question']
                     answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
-                    answer.finline_response = False
                 else:
+                    # Question can't be answered as is.
+                    answer.finline_response = True
                     answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+                
+                if answer.follow_on_questions:
+                    if len(answer.follow_on_questions) == 0:
+                        answer.follow_on_questions = None
+                        if answer.finline_response:
+                            answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+                    elif len(answer.follow_on_questions) == 1 and answer.finline_response:
+                        answer.finline_response = False
+                        answer.answer = ""
+                        answer.question = answer.follow_on_questions[0]
+                        answer.follow_on_questions = None
+                
                 return answer
+            
         except Exception as e:
             answer_text = str(e)
             logging.trace(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
             answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+
         return answer
 
 
@@ -1254,7 +1325,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.pre,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state],
             )
             pre = await chain.arun(
                 question=answer.question, callbacks=get_callbacks("pre")
@@ -1326,7 +1397,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
                     # memory=self.memory_model,
-                    system_prompt=self.prompts.system,
+                    system_prompt=self.prompts.default_system[answer.state],
                 )
                 previous_question = self.memory_model.buffer[-2].content
                 try:
@@ -1344,7 +1415,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state],
             )
 
             try:
@@ -1409,7 +1480,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.post,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state],
             )
             post = await chain.arun(**answer.dict(), callbacks=get_callbacks("post"))
             answer.answer = post

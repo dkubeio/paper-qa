@@ -12,6 +12,7 @@ from pydantic import BaseModel, validator
 from .prompts import (
     citation_prompt,
     default_system_prompt,
+    system_prompts,
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
@@ -82,7 +83,7 @@ class PromptCollection(BaseModel):
     pre: Optional[PromptTemplate] = None
     post: Optional[PromptTemplate] = None
     rewrite: PromptTemplate = rewrite_prompt
-    system: str = default_system_prompt
+    system: dict = system_prompts
     skip_summary: bool = False
 
     @validator("summary")
@@ -154,6 +155,7 @@ def __str__(self) -> str:
 class Answer(BaseModel):
     """A class to hold the answer to a question."""
 
+    state: str = "General"
     question: str
     answer: str = ""
     context: str = ""
