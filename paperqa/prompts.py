@@ -21,8 +21,8 @@ qa_prompt = PromptTemplate(
     input_variables=["context", "answer_length", "question"],
     template="Write an answer ({answer_length}) "
     "for the question below based on the provided context. "
-    "If the context provides insufficient information and the question cannot be directly answered, "
-    'reply "I cannot answer". '
+    "If the context doesn't answer to the intent of the question, or doesn't provide sufficient information to directly answer, "
+    'reply "I cannot answer" with a confidence_score of 1. '
     "For each part of your answer, indicate which sources most support it "
     "via valid citation markers at the end of sentences, like (Example2012). \n"
     "Context (with relevance scores):\n {context}\n"
@@ -76,11 +76,12 @@ qa_prompt = PromptTemplate(
     "Include sources used at the end of the response. \n"
     "Include confidence score of the generated summary on the scale of 1 to 10 \n"
     "Do not explain Confidence score. \n"
+    "If the context doesn't answer to the intent of the question, or doesn't provide sufficient information to directly answer the question, "
+    "reply `I cannot answer, Please escalate to supervisor or rephrase the question` and don't provide any logic for deriving this conclusion. "
     "If the context provides sufficient information reply strictly in the following format; Observe the new lines "
     "Answer: ...\n\n "
     "Sources: ...\n\n "
     "Confidence score: ... \n\n"
-    "If the context provides insufficient information reply `I cannot answer, Please escalate to supervisor or rephrase the question` and don't provide any logic for deriving this conclusion. "
     "Context:\n {context}\n"
     "Question: {question}\n"
     "Answer: ",
@@ -176,6 +177,7 @@ system_prompts = {
     'General': "You are a Retrieval Augmented Generation chatbot. Think step by step and answer in a direct and concise tone. ",
     'NV' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, NVHL, for the state of Nevada. Think step by step and answer in a direct and concise tone.\n",
     'PA' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, Pennie, for the state of Pennsylvania. Think step by step and answer in a direct and concise tone.\n",
+    'dss' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
 
 }
 
@@ -194,12 +196,14 @@ followup_system_prompt = PromptTemplate(
 #   "where question is derived from the scenario, group and topic are derived by classifying the derived question. "
 #           "- Also generate any followup questions that are relevant to the scenario in the same json format specified below. \n"
 
-rewrite_prompt = PromptTemplate(
+
+'''
+csr_rewrite_prompt = PromptTemplate(
     input_variables=["scenario", "json_format"],
-    template="Your task is to analyze a customer scenario, derive a potential policy and procedure question if any, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
-            "Use the following guidelines. \n"
+    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+            "Use the following guidelines for the task. \n"
+            "- If the scenario describes a question starting with `how` and `what` words, use the scenario also as is as a question. \n"
             "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
-            "- If the scenario describes a question in a meaningful way, use the scenario as is in a question as well. \n"
             "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
             "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
             "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
@@ -208,10 +212,26 @@ rewrite_prompt = PromptTemplate(
             "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
             "- Retain acronyms exactly as given in the scenario. \n"
             "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
-            "- Remove any personal information such as names, IDs from the scenario. \n\n"
+            "- Remove any personal information such as names, IDs from the scenario. \n\n"'''
+
+csr_rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+            "Use the following guidelines for the task. \n"
+            "- If the scenario describes a question starting with `how` and `what` words, include the scenario as a question. \n"
+            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
+            "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
+            "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
+            "- If no meaningful question can be derived, return n/a for the question. \n"
+            "- Follow the style and tone of the provided example_questions. \n"
+            "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
+            "- Retain acronyms exactly as given in the scenario. \n"
+            "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
+            "- Remove any personal information such as names, IDs, address from the scenario. \n\n"
 
     "example_questions: \n"
-        "  [ 'I was denied Medicaid, but I have no income, can I apply for Pennie?', 'What is the policy for effective date change request', 'What should I do if an AOR calls about a ticket?', 'How do I get status of a ticket?`, 'What do I need to do if a customer is getting an application loop?','How do I unlock an account?','What documents are needed to verify citizenship?','How much time does a consumer have to submit an ROP reinstatement request after notice?', 'How do I provide ticket status to a consumer?']\n\n"
+        "  [ 'I was denied Medicaid, but I have no income, can I apply for Pennie?', 'Why isnot pregnancy considered a Qualifying Life Event (QLE)?', 'What is the policy for effective date change request', 'What should I do if an AOR calls about a ticket?', 'How do I get status of a ticket?`, 'What do I need to do if a customer is getting an application loop?','How do I unlock an account?','What documents are needed to verify citizenship?','How much time does a consumer have to submit an ROP reinstatement request after notice?', 'How do I provide ticket status to a consumer?']\n\n"
         "\n\n"
     "classification_criteria: \n"
         "[ {{'group': 'Tech Aupport, 'topics': ['application updates', 'account creation', 'account unlock', 'password reset', 'account reclaim/access', 'ticket creation', 'consumer portal issues', 'Auth & DUO']}}," 
@@ -222,6 +242,50 @@ rewrite_prompt = PromptTemplate(
         "  {{'group': 'Miscellaneous', 'topics': [ '1095-A', 'Complaint', 'Appeal', 'Supervisor call request', 'Assister/Broker Training', 'Assister/Broker profile changes' , 'Assistant/Broker Designation', 'Assistant/Broker BOB']}}]\n\n"
         " \n\n"
         "ambiguous_scenarios: ['calling ticket', 'income', 'escalate', 'insurance']\n\n"
+    "Wrong format:\n"
+        "[{{\"question\": \"What is the status of ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}}]\n"
+        "Or,\n"
+        "[{{\"question\": \"How to check the status of Ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n"
+    "Correct format:\n"
+        "[{{\"question"": \"What does policy states about the status of a ticket?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}},"
+          "{{\"question\": \"How to check the status of a Ticket?\", \"group"": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n\n"
+    "Wrong format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B for Smith Li?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of TIC-123456's income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "Correct format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "\n\n"
+    "Scenario: {scenario}\n\n",
+)
+   # "Your task is to analyze a customer scenario, derive a potential policy and procedure question if any, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+
+# Child welfare - Department of Social Services
+dss_rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+            "Use the following guidelines. \n"
+            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
+            "- If the scenario describes a question in a meaningful way, use the scenario as is in a question as well. \n"
+            "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
+            "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Invent new groups or topics as needed. Ensure consistency. \n"
+            "- If no meaningful question can be derived, return n/a for the question. \n"
+            "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
+            "- Retain acronyms exactly as given in the scenario. \n"
+            "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
+            "- Remove any personal information such as names, IDs from the scenario. \n\n"
+
+
+    "classification_criteria: \n"
+        "[ {{'group': 'Missouri Practice Model, 'topics': ['Family engagement', 'Safety', 'Questioning' , 'Safety and Risk Assessment', 'Engaging', 'Safety', 'Planning', 'Closure']}}," 
+        "  {{'group': 'Intake', 'topics':['Reporting', 'Abuse', 'Referrals', 'Court' ]}}," 
+        "  {{'group': 'Delivery of Services/Intact Families (FCS)', 'topics' : ['Case Opening', 'Case Planning', 'Case Monitoring', 'Case closure']}}," 
+        "  {{'group': 'Alternative Care', 'topics' : ['Placements', 'Court', 'Support Teams', 'Adoption', 'Financials']}}," 
+        "  {{'group': 'Case Record Maintenance and Access', 'topics': [ 'Filing', 'Documentation', 'Access', 'Transfer', 'Rentention and Expungement']}}," 
+        "  {{'group': 'Resource Development', 'topics': [ 'Recruitment', 'Training', 'Emergency', 'Foster care']}}]\n\n"
+        " \n\n"
+ 
     "Wrong format:\n"
         "[{{\"question\": \"What is the status of ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}}]\n"
         "Or,\n"
@@ -273,3 +337,7 @@ rewrite_prompt = PromptTemplate(
 
 '''
 
+rewrite_prompts = {
+    'csr' : csr_rewrite_prompt,
+    'dss' : dss_rewrite_prompt
+}

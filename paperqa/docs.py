@@ -850,7 +850,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.summary,
                 self.summary_llm,
                 memory=self.memory_model,
-                system_prompt=self.prompts.system[answer.state],
+                system_prompt=self.prompts.system[answer.system],
             )
             # This is dangerous because it
             # could mask errors that are important- like auth errors
@@ -1171,7 +1171,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
- 
+    
         
     async def rewrite_query(
         self,
@@ -1181,6 +1181,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
+        app: Optional[str] = 'csr',
     ) ->  dict:  
 
         CONFIDENCE_THRESHOLD = 8 #out of 10 for a rewrite
@@ -1190,18 +1191,85 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 return text
             else:
                 return text[:index].strip()
+            
+        import json
+        import re
+
+        def extract_followup_questions(text):
+            """
+            Extracts the 'Followup questions' section from the given text and returns it as a JSON string.
+            
+            Parameters:
+                text (str): The input text containing potential 'Followup questions'.
+                
+            Returns:
+                str or None: JSON string of follow-up questions if found and parsed successfully; otherwise, None.
+            """
+            # Define a regex pattern to locate 'Followup questions:' followed by a JSON array
+            pattern = r'(Follow[-\s]?up questions):\s*(\[[^\]]*\])'
+            
+            # Search for the pattern using regex
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            
+            if not match:
+                # 'Followup questions:' section not found
+                return None
+            
+            # Extract the JSON array string from the matched group
+            followup_text = match.group(2)
+            
+            try:
+                # Parse the extracted string to verify it's valid JSON
+                followup_questions = eval(followup_text)
+                
+                # Convert the Python object back to a formatted JSON string
+                #followup_json = json.dumps(followup_questions, indent=4)
+                
+                return followup_questions
+            except json.JSONDecodeError as e:
+                # Handle JSON parsing errors
+                print("Error decoding JSON:", e)
+                return None
+
+        def extract_rewritten_questions(derived_ctx):
+            import re
+            # Use regex to find the first section enclosed in square brackets
+            pattern = re.compile(r'\[.*?\]', re.DOTALL)
+            match = pattern.search(derived_ctx)
+
+            if match:
+                derived_ctx = match.group(0)
+                return eval(derived_ctx)
+            else:
+                # rewrite formal failures: Use the original question. No rewrite
+                return None
+        def add_followup_questions(answer, questions, skip1=False):
+            for q in questions:
+                if skip1:
+                    skip1 = False
+                elif q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
+                    answer.question != q['question']:
+                        answer.follow_on_questions.append(q['question'])
+
+        followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
         answer.finline_response = False
-        answer.state = state_category[0] if state_category else 'General'
+        answer.follow_on_questions = []
+        if app == 'csr':
+            answer.system = state_category[0] if state_category else 'General'
+        elif app == 'dss':
+            answer.system = app
+
+
         if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
             answer.question = remove_suffix(answer.question, "/norewrite")
             return answer
         rewrite_chain = make_chain(
-            self.prompts.rewrite,
+            self.prompts.rewrite[app],
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
-            system_prompt=self.prompts.system[answer.state],
+            system_prompt=self.prompts.system[answer.system],
         )
         start_time = datetime.now()
         derived_ctx = ""
@@ -1223,32 +1291,38 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
         try: 
             if derived_ctx != "":
-                import re
-                # Use regex to find the first section enclosed in square brackets
-                pattern = re.compile(r'\[.*?\]', re.DOTALL)
-                match = pattern.search(derived_ctx)
 
-                if match:
-                    derived_ctx = match.group(0)
-                else:
-                    # rewrite formal failures: Use the original question. No rewrite
-                    return answer
-
-                derived = eval(derived_ctx)
+                derived = extract_rewritten_questions(derived_ctx)
+                # Extract and convert follow-up questions to JSON
+                followup_questions = extract_followup_questions(derived_ctx)
                 nquestions = len(derived)
-                if nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD:
+
+                if nquestions == 0 or (nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD):
                     # can't answer
                     answer.finline_response = True
-                    answer.answer =f"\nThe original question is ambiguous. The suggested questions are given below as Followup questions. "\
-                                    "Please ask Agent Assist one of these questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
-                    answer.follow_on_questions = []
-                    for q in derived:
-                        if q['confidence_score'] >= CONFIDENCE_THRESHOLD:
-                            answer.follow_on_questions.append(q['question'])
-                    if len(answer.follow_on_questions) == 0:
-                        answer.answer =f"\nI can't answer that question. Please rephrase or escalate"
-                        answer.follow_on_questions = None
-                    return answer
+                    answer.answer =f"\nThe original question is ambiguous. "\
+                                    "Please rephrase or escalate to supervisor. \n\n"
+                    
+                else:
+        
+                    for idx, q in enumerate(derived):
+                        if q['question'] == answer.question:
+                            answer.metadata = {'category':q['group'], 'topic':q['topic']}
+                            del derived[idx]
+                            break
+                    if answer.metadata is None:
+                        answer.question = derived[0]['question']
+                        answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
+                        add_followup_questions(answer, derived, skip1=True)
+                    elif len(derived):
+                        add_followup_questions(answer, derived)
+
+                
+                if followup_questions:
+                    add_followup_questions(answer, followup_questions)
+
+                return answer
+                '''
                 if nquestions > 2:
                     if answer.question.startswith(('What', 'what', 'How', 'how')):
                         # Question is mostly formatted. Use the original question
@@ -1308,7 +1382,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         answer.answer = ""
                         answer.question = answer.follow_on_questions[0]
                         answer.follow_on_questions = None
-                
+                '''
+
                 return answer
             
         except Exception as e:
@@ -1332,7 +1407,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.pre,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system[answer.state],
+                system_prompt=self.prompts.system[answer.system],
             )
             pre = await chain.arun(
                 question=answer.question, callbacks=get_callbacks("pre")
@@ -1405,7 +1480,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
                     # memory=self.memory_model,
-                    system_prompt=self.prompts.default_system[answer.state],
+                    system_prompt=self.prompts.default_system[answer.system],
                 )
                 previous_question = self.memory_model.buffer[-2].content
                 try:
@@ -1423,7 +1498,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system[answer.state],
+                system_prompt=self.prompts.system[answer.system],
             )
 
             try:
@@ -1488,7 +1563,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.post,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system[answer.state],
+                system_prompt=self.prompts.system[answer.system],
             )
             post = await chain.arun(**answer.dict(), callbacks=get_callbacks("post"))
             answer.answer = post
