@@ -84,6 +84,7 @@ qa_prompt = PromptTemplate(
     "Confidence score: ... \n\n"
     "Context:\n {context}\n"
     "Question: {question}\n"
+    "Answer: ",
 )
     #"Answer: "
     #"Sources: ",
@@ -388,6 +389,7 @@ ga_rewrite_prompt = PromptTemplate(
     
     "scenario: {scenario}\n\n",
 )
+
 '''
 
 rewrite_prompts = {
@@ -396,3 +398,4 @@ rewrite_prompts = {
     'MO' : dss_rewrite_prompt,
     'GA' : ga_rewrite_prompt
 }
+

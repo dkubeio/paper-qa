@@ -423,15 +423,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding faq embeddings")
 
-        if self.doc_index is not None:
-            #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
-            self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+        if not sllm_qna:
+            if self.doc_index is not None:
+                #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+                self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
 
-        self.docs[doc.dockey] = doc
-        if self.texts_index is None:
-            self.texts += texts
+            self.docs[doc.dockey] = doc
+            if self.texts_index is None:
+                self.texts += texts
 
-        self.docnames.add(doc.docname)
+            self.docnames.add(doc.docname)
 
         return True
 
@@ -488,6 +489,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = self.doc_index.max_marginal_relevance_search(
             query, k=k + len(self.deleted_dockeys)
         )
+
+        # temporary work for fm-controller crash. Need to be removed.
+        # Need to update the doc index when ever it changes in the dataset
+        # but for now we are doing it here.
+        matches = []
         # filter the matches
         matches = [
             m for m in matches if m.metadata["dockey"] not in self.deleted_dockeys
@@ -1056,6 +1062,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
+            answer.validated = matches_with_score[0][0].metadata['validated']
             
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
                 if answer.faq_feedback == 'negative':
@@ -1444,7 +1451,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         bib_str += f"\n {i+1}. {citation}"
                     ref_str += f"\n {i+1}. [{citation}]()"
                     ref_dict.append({"rank":i+1, "ref":f"{citation}", "doc_source": c.text.doc_source.lower()})
-      
+        
+        answer.ref_str = ref_str
         if securellm:
             tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
             tags['debug_properties']['references'] = ref_str
