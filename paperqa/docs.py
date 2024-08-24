@@ -1181,10 +1181,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         state_category: Optional[Tuple[str]] = None,
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
-        app: Optional[str] = 'csr',
     ) ->  dict:  
 
-        CONFIDENCE_THRESHOLD = 8 #out of 10 for a rewrite
+        CONFIDENCE_THRESHOLD = 5 #out of 10 for a rewrite
         def remove_suffix(text, match):
             index = text.rfind(match)
             if index == -1:
@@ -1249,24 +1248,21 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     skip1 = False
                 elif q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
-                        answer.follow_on_questions.append(q['question'])
+                        answer.follow_on_questions.append(f"{q['question']}/norewrite")
 
         followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
         answer.finline_response = False
         answer.follow_on_questions = []
-        if app == 'csr':
-            answer.system = state_category[0] if state_category else 'General'
-        elif app == 'dss':
-            answer.system = app
-
+        answer.system = state_category[0] if state_category else 'General'
 
         if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+            # Todo: Use LLM to just create topic & category
             answer.question = remove_suffix(answer.question, "/norewrite")
             return answer
         rewrite_chain = make_chain(
-            self.prompts.rewrite[app],
+            self.prompts.rewrite[answer.system],
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
             system_prompt=self.prompts.system[answer.system],
