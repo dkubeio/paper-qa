@@ -176,7 +176,8 @@ system_prompts = {
     'General': "You are a Retrieval Augmented Generation chatbot. Think step by step and answer in a direct and concise tone. ",
     'NV' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, NVHL, for the state of Nevada. Think step by step and answer in a direct and concise tone.\n",
     'PA' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, Pennie, for the state of Pennsylvania. Think step by step and answer in a direct and concise tone.\n",
-    'dss' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
+    'MO' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
+    'GA' : "You are an expert Policy and Manual Management System (PAMMS) Agent Assist in Division of Family and Children Services, DFCS in state of Georgia. Think step by step and answer in a direct and concise tone.\n",
 
 }
 
@@ -211,7 +212,8 @@ csr_rewrite_prompt = PromptTemplate(
             "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
             "- Retain acronyms exactly as given in the scenario. \n"
             "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
-            "- Remove any personal information such as names, IDs from the scenario. \n\n"'''
+            "- Remove any personal information such as names, IDs from the scenario. \n\n"
+'''
 
 csr_rewrite_prompt = PromptTemplate(
     input_variables=["scenario", "json_format"],
@@ -301,6 +303,59 @@ dss_rewrite_prompt = PromptTemplate(
     "\n\n"
     "Scenario: {scenario}\n\n",
 )
+
+ga_rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+            "Use the following guidelines. \n"
+            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
+            "- If the scenario describes a question in a meaningful way, use the scenario as is in a question as well. \n"
+            "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
+            "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Invent new groups or topics as needed. Ensure consistency. \n"
+            "- If no meaningful question can be derived, return n/a for the question. \n"
+            "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
+            "- Retain acronyms exactly as given in the scenario. \n"
+            "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
+            "- Remove any personal information such as names, IDs from the scenario. \n\n"
+
+
+    "classification_criteria: \n"
+        "[{{ 'group':'Legal Framework','topics': ['ADA Overview','Section 504 Summary','Title II & III Details','Compliance Standards','Key Legal Cases' ] }},"
+        "{{'group':'Accessibility','topics': ['Facility Access','Service Modifications','Communication Aids','Coordinator Role','Public Notices' ] }},"
+        "{{'group':'Disability Criteria','topics': ['Disability Definition','Qualified Individuals','Exclusions','Mobility Aids','Service Animals' ] }},"
+        "{{'group':'Responsibilities','topics': ['DFCS Obligations','Provider Compliance','Coordinator Duties','Staff Training','Self-Assessment' ] }},"
+        "{{'group':'Public Communication','topics': ['Rights Notifications','Disability Interaction','Modification Requests','Complaint Process','Alternative Formats' ] }},"
+        "{{'group':'Compliance','topics': ['Nondiscrimination','Reasonable Modifications','Data Collection','Training','Public Notifications' ] }},"
+        "{{'group':'Rights','topics': ['Filing Complaints','Communication Assistance','Privacy Protection','LEP Services','Disability Accommodations' ] }},"
+        "{{'group':'Programs','topics': ['SNAP','CSFP','TEFAP','USDA Compliance','HHS Compliance' ] }},"
+        "{{'group':'Responsibilities','topics': ['Staff Obligations','Contractor Duties','Reporting Noncompliance','Monitoring Procedures','Review Processes' ] }},"
+        "{{ 'group':'Legal Framework','topics': ['Civil Rights Act','Title VI','Title IX','Rehabilitation Act','Federal Guidelines' ] }},"
+        "{{'group':'Voter Registration','topics': ['Background':'NVRA Overview','Requirements':'Document Distribution','Procedures':'Forms and Processing','Customer Assistance':'Voter Registration Support','Confidentiality':'Information and Records','Contacts':'Getting Help'] }},"
+        "{{ 'group':'CSBG','topics': ['Program Overview','Board Governance','Needs Assessment','Action Plan','Fiscal Management','Types of Income','Client Eligibility','ADA & Section 504','Fair Hearing' ] }},"
+        "{{'group':'LIHEAP','topics': ['Program Overview','Program Authorization','Fraud Prevention','Vendor Management','Weatherization','Program Monitoring','Fair Hearing','ADA & Section 504' ] }},"
+        "{{'group':'Medicaid','topics':['2000':'General Information','2050':'Application Processing','2100':'Classes of Assistance','2200':'Eligibility Criteria','2300':'Resources','2400':'Income','2500':'ABD Budgeting','2550':'Patient Liability/Cost Share','2575':'Nursing Home Payments','2600':'Family Assistance Units','2650':'Family Budgeting','2700':'Case Management','2800':'Children in Placement','2900':'Referrals','ABD Financial Limits','Family Financial Limits']}},"
+        "{{'group':'SNAPProgram Overview','topics': ['General Program Overview','Application Process Overview','Assistance Units Overview','Basic Eligibility Criteria Overview','Financial Eligibility Criteria Overview' ] }},"
+        "{{'group':'SNAP System Processes','topics': ['Computer Matches Overview','Budgeting Overview','Ongoing Case Management Overview','Issuance Overview']}},"
+        "{{'group':'SNAP Miscellaneous','topics': ['Financial Standards','Hearings','Manual Transmittal Cover Letters','Case Record Maintenance and Document Management','Glossary','Forms','Customer Complaint Procedures','Child Support Services Glossary' ] }}] \n\n"
+ 
+    "Wrong format:\n"
+        "[{{\"question\": \"What is the status of ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}}]\n"
+        "Or,\n"
+        "[{{\"question\": \"How to check the status of Ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n"
+    "Correct format:\n"
+        "[{{\"question"": \"What does policy states about the status of a ticket?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}},"
+          "{{\"question\": \"How to check the status of a Ticket?\", \"group"": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n\n"
+    "Wrong format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B for Smith Li?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of TIC-123456's income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "Correct format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "\n\n"
+    "Scenario: {scenario}\n\n",
+)
+
     
     
 '''
@@ -336,6 +391,8 @@ dss_rewrite_prompt = PromptTemplate(
 '''
 
 rewrite_prompts = {
-    'csr' : csr_rewrite_prompt,
-    'dss' : dss_rewrite_prompt
+    'NV' : csr_rewrite_prompt,
+    'PA' : csr_rewrite_prompt,
+    'MO' : dss_rewrite_prompt,
+    'GA' : ga_rewrite_prompt
 }
