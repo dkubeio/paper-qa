@@ -850,7 +850,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.summary,
                 self.summary_llm,
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.system],
             )
             # This is dangerous because it
             # could mask errors that are important- like auth errors
@@ -1184,12 +1184,15 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer = Answer(question=query)
         answer.trace_id = trace_id
         answer.finline_response = True
+        answer.state_category = state_category[0] if state_category else 'General'
+
         rewrite_chain = make_chain(
-            self.prompts.rewrite,
+            self.prompts.rewrite[answer.state_category],
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
-            system_prompt=self.prompts.system,
+            system_prompt=self.prompts.system[answer.state_category],
         )
+
         start_time = datetime.now()
         derived_ctx = ""
         try:
@@ -1207,6 +1210,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return answer
 
         end_time = datetime.now()
+
 
         logging.trace(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
         logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
@@ -1261,7 +1265,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.pre,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state_category],
             )
             pre = await chain.arun(
                 question=answer.question, callbacks=get_callbacks("pre")
@@ -1334,7 +1338,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     self.prompts.followup,
                     cast(BaseLanguageModel, self.llm),
                     # memory=self.memory_model,
-                    system_prompt=self.prompts.system,
+                    system_prompt=self.prompts.system[answer.state_category]
                 )
                 previous_question = self.memory_model.buffer[-2].content
                 try:
@@ -1352,7 +1356,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.qa,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state_category]
             )
 
             try:
@@ -1417,13 +1421,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 self.prompts.post,
                 cast(BaseLanguageModel, self.llm),
                 memory=self.memory_model,
-                system_prompt=self.prompts.system,
+                system_prompt=self.prompts.system[answer.state_category]
             )
             post = await chain.arun(**answer.dict(), callbacks=get_callbacks("post"))
             answer.answer = post
             answer.formatted_answer = f"Question: {answer.question}\n\n{post}\n"
             if len(bib) > 0:
                 answer.formatted_answer += f"\nReferences\n\n{bib_str}\n"
+
         if self.memory_model is not None and not anchor_flag:
             answer.memory = self.memory_model.load_memory_variables(inputs={})["memory"]
             self.memory_model.save_context(

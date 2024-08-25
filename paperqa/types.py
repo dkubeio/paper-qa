@@ -12,10 +12,11 @@ from pydantic import BaseModel, validator
 from .prompts import (
     citation_prompt,
     default_system_prompt,
+    system_prompts,
     qa_prompt,
     select_paper_prompt,
     summary_prompt,
-    rewrite_prompt,
+    rewrite_prompts,
     followup_system_prompt
 )
 
@@ -83,8 +84,8 @@ class PromptCollection(BaseModel):
     cite: PromptTemplate = citation_prompt
     pre: Optional[PromptTemplate] = None
     post: Optional[PromptTemplate] = None
-    rewrite: PromptTemplate = rewrite_prompt
-    system: str = default_system_prompt
+    rewrite: Dict[str, str] = rewrite_prompts
+    system: Dict[str, str] = system_prompts
     skip_summary: bool = False
 
     @validator("summary")
@@ -184,6 +185,7 @@ class Answer(BaseModel):
     metadata: Optional[Dict[str, str]] = None
     finline_response: bool = False
     validated: Optional[bool] = False
+    state_category: Optional[str] = "General"
 
     def __str__(self) -> str:
         """Return the answer as a string."""
