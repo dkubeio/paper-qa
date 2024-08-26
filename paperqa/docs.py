@@ -13,6 +13,8 @@ from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
 import glob
 import traceback
 from urllib.parse import quote
+import json
+import re
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -1171,6 +1173,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
+
     async def rewrite_query(
         self,
         query: str,
@@ -1181,10 +1184,84 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         topic: Optional[Tuple[str]] = None,
     ) ->  dict:  
 
-        answer = Answer(question=query)
+        CONFIDENCE_THRESHOLD = 5 #out of 10 for a rewrite
+        def remove_suffix(text, match):
+            index = text.rfind(match)
+            if index == -1:
+                return text
+            else:
+                return text[:index].strip()
+
+        def extract_followup_questions(text):
+            """
+            Extracts the 'Followup questions' section from the given text and returns it as a JSON string.
+            
+            Parameters:
+                text (str): The input text containing potential 'Followup questions'.
+                
+            Returns:
+                str or None: JSON string of follow-up questions if found and parsed successfully; otherwise, None.
+            """
+            # Define a regex pattern to locate 'Followup questions:' followed by a JSON array
+            pattern = r'(Follow[-\s]?up questions):\s*(\[[^\]]*\])'
+            
+            # Search for the pattern using regex
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            
+            if not match:
+                # 'Followup questions:' section not found
+                return None
+            
+            # Extract the JSON array string from the matched group
+            followup_text = match.group(2)
+            
+            try:
+                # Parse the extracted string to verify it's valid JSON
+                followup_questions = eval(followup_text)
+                
+                # Convert the Python object back to a formatted JSON string
+                #followup_json = json.dumps(followup_questions, indent=4)
+                
+                return followup_questions
+            except json.JSONDecodeError as e:
+                # Handle JSON parsing errors
+                print("Error decoding JSON:", e)
+                return None
+
+
+        def extract_rewritten_questions(derived_ctx):
+            import re
+            # Use regex to find the first section enclosed in square brackets
+            pattern = re.compile(r'\[.*?\]', re.DOTALL)
+            match = pattern.search(derived_ctx)
+
+            if match:
+                derived_ctx = match.group(0)
+                return eval(derived_ctx)
+            else:
+                # rewrite formal failures: Use the original question. No rewrite
+                return None
+
+
+        def add_followup_questions(answer, questions, skip1=False):
+            for q in questions:
+                if skip1:
+                    skip1 = False
+                elif q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
+                    answer.question != q['question']:
+                        answer.follow_on_questions.append(f"{q['question']}/norewrite")
+
+        followup_questions = None
+        answer = Answer(question=query.strip())
         answer.trace_id = trace_id
-        answer.finline_response = True
+        answer.finline_response = False
+        answer.follow_on_questions = []
         answer.state_category = state_category[0] if state_category else 'General'
+
+        if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+            # Todo: Use LLM to just create topic & category
+            answer.question = remove_suffix(answer.question, "/norewrite")
+            return answer
 
         rewrite_chain = make_chain(
             self.prompts.rewrite[answer.state_category],
@@ -1192,63 +1269,65 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             memory=self.memory_model,
             system_prompt=self.prompts.system[answer.state_category],
         )
-
         start_time = datetime.now()
         derived_ctx = ""
+
         try:
             derived_ctx = await rewrite_chain.arun(
                 scenario=query,
-                json_format='[{"question": "...","group": "...","topic": "..."}, {"question": "...","group": "...","topic": "..."}]'
+                json_format='[{"question": "...","group": "...","topic": "...", "confidence_score": "..."}, {"question": "...","group": "...","topic": "...", "confidence_score": "..."}]'
                 #callbacks=get_callbacks("rewrite"),
             )
         except Exception as e:
             answer_text = str(e)
             logging.trace(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
-            #answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
-            #answer.question = "n/a"
-            answer.finline_response = False
+            # rewrite format failures: Use the original question
             return answer
 
         end_time = datetime.now()
-
 
         logging.trace(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
         logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
         try: 
             if derived_ctx != "":
-                import re
-                # Use regex to find the first section enclosed in square brackets
-                pattern = re.compile(r'\[.*?\]', re.DOTALL)
-                match = pattern.search(derived_ctx)
-
-                if match:
-                    derived_ctx = match.group(0)
-                else:
-                    # Use the original question. No rewrite
-                    answer.finline_response = False
-                    return answer
-
-                derived = eval(derived_ctx)
+                derived = extract_rewritten_questions(derived_ctx)
+                # Extract and convert follow-up questions to JSON
+                followup_questions = extract_followup_questions(derived_ctx)
+                print(f"followup_questions: {followup_questions}")
                 nquestions = len(derived)
-                if nquestions > 1:
+
+                if nquestions == 0 or (nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD):
+                    # can't answer
                     answer.finline_response = True
-                    # This involves multiple questions. I will not answer for now.
-                    answer.answer =f"\nYou asked a compound question which contains {nquestions} subquestions. These are listed as Followup questions below. "\
-                                    "Please ask Agent Assist one of the Followup questions (you may rephrase them as needed) or escalate to supervisor. \n\n"
-                    answer.follow_on_questions = []
-                    for q in derived:
-                        answer.follow_on_questions.append(q['question'])
-                elif nquestions == 1:
-                    answer.question = derived[0]['question']
-                    answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
-                    answer.finline_response = False
+                    answer.answer =f"\nThe original question is ambiguous. "\
+                                    "Please rephrase or escalate to supervisor. \n\n"
+                    
                 else:
-                    answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+        
+                    for idx, q in enumerate(derived):
+                        if q['question'] == answer.question:
+                            answer.metadata = {'category':q['group'], 'topic':q['topic']}
+                            del derived[idx]
+                            break
+
+                    if answer.metadata is None:
+                        answer.question = derived[0]['question']
+                        answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
+                        add_followup_questions(answer, derived, skip1=True)
+
+                    elif len(derived):
+                        add_followup_questions(answer, derived)
+                
+                if followup_questions:
+                    add_followup_questions(answer, followup_questions)
+
                 return answer
+            
         except Exception as e:
             answer_text = str(e)
             logging.trace(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
             answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
+
         return answer
 
 
