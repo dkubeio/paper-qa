@@ -1065,8 +1065,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
+            answer.faq_match_question = matches_with_score[0][0].metadata['question']
             
-            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.96) or (answer.faq_vectorstore_score >= 0.99):
+            # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.96) or (answer.faq_vectorstore_score >= 0.99):
+            # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.94) or (answer.faq_vectorstore_score >= 0.99):
+            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.92) or (answer.faq_vectorstore_score >= 0.99):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
                     answer.references = matches_with_score[0][0].metadata['feedback_sources']
@@ -1086,7 +1089,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
                 answer.faq_doc = matches_with_score[0][0].metadata['doc']
                 answer.trace_id = trace_id
-                answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
                 questions = []
                 if follow_on_questions:
