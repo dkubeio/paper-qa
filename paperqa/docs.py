@@ -1070,6 +1070,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
                     answer.references = matches_with_score[0][0].metadata['feedback_sources']
+                elif answer.faq_feedback == 'positive':
+                    answer.answer = matches_with_score[0][0].page_content if matches_with_score[0][0].metadata['feedback_answer'] == '' else matches_with_score[0][0].metadata['feedback_answer']
+                    answer.references = matches_with_score[0][0].metadata['references']
                 else:
                     answer.answer = matches_with_score[0][0].page_content
                     answer.references = matches_with_score[0][0].metadata['references']
@@ -1293,7 +1296,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 derived = extract_rewritten_questions(derived_ctx)
                 # Extract and convert follow-up questions to JSON
                 followup_questions = extract_followup_questions(derived_ctx)
-                print(f"followup_questions: {followup_questions}")
+                # print(f"followup_questions: {followup_questions}")
                 nquestions = len(derived)
 
                 if nquestions == 0 or (nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD):
