@@ -1293,7 +1293,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 derived = extract_rewritten_questions(derived_ctx)
                 # Extract and convert follow-up questions to JSON
                 followup_questions = extract_followup_questions(derived_ctx)
-                print(f"followup_questions: {followup_questions}")
                 nquestions = len(derived)
 
                 if nquestions == 0 or (nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD):
