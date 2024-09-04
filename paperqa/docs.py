@@ -755,18 +755,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             # calculate time taken by similarity_search_with_score in milliseconds
             start_time = datetime.now()
-            logging.trace(f"state_category:{state_category} designation_category:{designation_category} topics:{topic}")
+            logging.info(f"state_category:{state_category} designation_category:{designation_category} topics:{topic}")
             category_filter = self.category_filter_get(state_category, designation_category, topic)
-            logging.trace(f"weaviate category filter:{category_filter}")
-            logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
+            logging.info(f"weaviate category filter:{category_filter}")
+            logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=category_filter
             )
-            logging.trace(f"length of matches with score: {len(matches_with_score)}")
+            logging.info(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
+            logging.info(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
 
             if not matches_with_score:
                 raise NoMatchesFoundException("No matches found for the given query")
@@ -780,7 +780,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             num_of_log_entries = 10
             for m, score in zip(matches[:num_of_log_entries], scores[:num_of_log_entries]):
                 vector_id = m.metadata["_additional"]["id"]
-                logging.trace(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                logging.info(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
                               f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
                 rank += 1
@@ -933,10 +933,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
                 for m in matches:
                     vector_id = m.metadata["_additional"]["id"]
-                    logging.trace(f"trace_id:{trace_id} rerank-vectorid:{vector_id} reranker score:{m.metadata['score']}")
+                    logging.info(f"trace_id:{trace_id} rerank-vectorid:{vector_id} reranker score:{m.metadata['score']}")
 
                 end_time = datetime.now()
-                logging.trace(f"trace_id:{trace_id} reranker-time:{(end_time - start_time).microseconds / 1000}ms")
+                logging.info(f"trace_id:{trace_id} reranker-time:{(end_time - start_time).microseconds / 1000}ms")
 
                 for i, match in enumerate(matches):
                     logging.info(f"content: {match.page_content[:32]} {match.metadata['score']}")
@@ -1045,7 +1045,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
-        logging.trace(f"trace_id:{trace_id} category_filter:{category_filter}")
+        logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
         matches_with_score = []
         try:
@@ -1280,14 +1280,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         except Exception as e:
             answer_text = str(e)
-            logging.trace(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
+            logging.info(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
             # rewrite format failures: Use the original question
             return answer
 
         end_time = datetime.now()
 
-        logging.trace(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
-        logging.trace(f"trace_id:{trace_id} derived_json: {derived_ctx}")
+        logging.info(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
+        logging.info(f"trace_id:{trace_id} derived_json: {derived_ctx}")
         try: 
             if derived_ctx != "":
                 derived = extract_rewritten_questions(derived_ctx)
@@ -1324,7 +1324,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             
         except Exception as e:
             answer_text = str(e)
-            logging.trace(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
+            logging.info(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
             answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
 
         return answer
@@ -1409,7 +1409,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             callbacks = get_callbacks("answer")
             if self.memory_model:
                 memory_str = str(self.memory_model.load_memory_variables({})["memory"])
-                logging.trace(f"trace_id:{trace_id} conversation_history:{memory_str}")
+                logging.info(f"trace_id:{trace_id} conversation_history:{memory_str}")
 
             if self.memory_model and self.memory_model.buffer:
                 followup_chain = make_chain(
@@ -1428,7 +1428,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 except Exception as e:
                     followup_question = str(e)
                 answer.question = followup_question
-                logging.trace(f"trace_id:{trace_id} follow-up:{answer.question}")
+                logging.info(f"trace_id:{trace_id} follow-up:{answer.question}")
 
             qa_chain = make_chain(
                 self.prompts.qa,
@@ -1438,7 +1438,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
 
             try:
-                # logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+                # logging.info(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
@@ -1449,7 +1449,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer_text = str(e)
 
             end_time = datetime.now()
-            logging.trace(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
+            logging.info(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
