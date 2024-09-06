@@ -1070,6 +1070,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
                     answer.references = matches_with_score[0][0].metadata['feedback_sources']
+                elif answer.faq_feedback == 'positive':
+                    answer.answer = matches_with_score[0][0].page_content if matches_with_score[0][0].metadata['feedback_answer'] == '' else matches_with_score[0][0].metadata['feedback_answer']
+                    answer.references = matches_with_score[0][0].metadata['references']
                 else:
                     answer.answer = matches_with_score[0][0].page_content
                     answer.references = matches_with_score[0][0].metadata['references']
