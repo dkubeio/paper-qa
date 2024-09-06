@@ -1454,7 +1454,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
 
             try:
-                # logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+                # Comment the next line
+                #logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
