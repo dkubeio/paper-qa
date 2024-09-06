@@ -1302,17 +1302,33 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                                     "Please rephrase or escalate to supervisor. \n\n"
                     
                 else:
-        
+                    lcase_question = (answer.question.split())[0].lower()
+                    find_match = None
+                    if lcase_question.startswith('how'):
+                        find_match = ['how']
+                    elif lcase_question.startswith('what'):
+                        find_match = ['what']
+                    else:
+                        find_match = ['how']
+
                     for idx, q in enumerate(derived):
                         if q['question'] == answer.question:
                             answer.metadata = {'category':q['group'], 'topic':q['topic']}
                             del derived[idx]
                             break
+                        elif find_match and q['question'].lower().startswith(find_match[0]):
+                            find_match.append(idx)
+
 
                     if answer.metadata is None:
-                        answer.question = derived[0]['question']
-                        answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
-                        add_followup_questions(answer, derived, skip1=True)
+                        idx = 0
+                        if find_match and len(find_match) > 1:
+                            idx = find_match[1]
+
+                        answer.question = derived[idx]['question']
+                        answer.metadata = {'category':derived[idx]['group'], 'topic':derived[idx]['topic']}
+                        del derived[idx]
+                        add_followup_questions(answer, derived)
 
                     elif len(derived):
                         add_followup_questions(answer, derived)
@@ -1438,7 +1454,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
 
             try:
-                # logging.info(f"trace_id:{trace_id} context:{answer.context}")
+                # logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
@@ -1450,6 +1466,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             end_time = datetime.now()
             logging.info(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
+
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
