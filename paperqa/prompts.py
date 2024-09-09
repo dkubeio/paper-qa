@@ -193,24 +193,35 @@ followup_system_prompt = PromptTemplate(
 
 csr_rewrite_prompt = PromptTemplate(
     input_variables=["scenario", "json_format"],
-    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent of the scenario, and suggest upto 4 additional followup questions. Classify each question using the classification_criteria provided.  "
+    #        "Use the following guidelines for the task. \n"
+    template="Your task is to analyze the customer scenario. "
+            "If the scenario is a well formed question, only fix the typos if any. "
+            "Otherwise, derive meaningful questions without changing the intent. "
+            "Suggest upto 4 followup questions as well. "
+            "Use the example_questions below to determine if the scenario is a well formed question. "
+            "Classify each question using the classification_criteria provided.  "
             "Use the following guidelines for the task. \n"
-            "- If the scenario describes a question starting with `how` and `what` words, include the scenario as a question. \n"
-            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
+            "- scenario starting with How, What, Can, Will, Why would typically tend to be well formed question. "
+            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. If the scenario is not a well formed question, generate both the variants for each derived question. \n "
             "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- if the original `scenario` describes a Policy, place the Policy questions at the top of the json list, but if it describes a procedure, place procedural question at the top of the json list. \n "
             "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
-            "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
+            "- Each question must have one group, one topic, and a similarity_score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
+            "-- similarity_score describes how similar is the generated question to the scenario. \n"
             "- If no meaningful question can be derived, return n/a for the question. \n"
             "- Follow the style and tone of the provided example_questions. \n"
             "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
             "- Retain acronyms exactly as given in the scenario. \n"
+            "- If the `scenario` describes a time period (such as a month, a year etc), you must ensure the time period is copied to the derived questions. \n"
             "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
             "- If the scenrio is about no income benefits, generate free and low-cost benefits questions as well. \n"
             "- A reference to a number in the scenario could mean contact number. \n"
             "- Remove any personal information such as names, IDs, address from the scenario. \n\n"
 
     "example_questions: \n"
-        "  [ 'I was denied Medicaid, but I have no income, can I apply for Pennie?', 'Why is not pregnancy considered a Qualifying Life Event (QLE)?', 'What is the contact number for Medicaid inquiries?', 'What is the policy for effective date change request', 'What should I do if an AOR calls about a ticket?', 'How do I get status of a ticket?`, 'What do I need to do if a customer is getting an application loop?','How do I unlock an account?','What documents are needed to verify citizenship?','How much time does a consumer have to submit an ROP reinstatement request after notice?', 'How do I provide ticket status to a consumer?']\n\n"
+        "  [ 'What should I do when APTCs were not applied to a month due to Medicaid termination?', 'Why did my Advanced Premium Tax Credit disappear?', 'Can self-employed individuals get Penny coverage?', 'Will I receive a 1095 form if I am enrolled in Medicaid?', 'I was denied Medicaid, but I have no income, can I apply for Pennie?', 'Why is not pregnancy considered a Qualifying Life Event (QLE)?', 'What is the contact number for Medicaid inquiries?', 'What is the policy for effective date change request', 'What should I do if an AOR calls about a ticket?', 'How do I get status of a ticket?`, 'What do I need to do if a customer is getting an application loop?','How do I unlock an account?','What documents are needed to verify citizenship?','How much time does a consumer have to submit an ROP reinstatement request after notice?', 'How do I provide ticket status to a consumer?']\n\n"
         "\n\n"
     "classification_criteria: \n"
         "[ {{'group': 'Tech Aupport, 'topics': ['application updates', 'account creation', 'account unlock', 'password reset', 'account reclaim/access', 'ticket creation', 'consumer portal issues', 'Auth & DUO']}}," 
@@ -241,12 +252,68 @@ csr_rewrite_prompt = PromptTemplate(
     "\n\n"
     "Scenario: {scenario}\n\n",
 )
+
+csr_rewrite_prompt_raw = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    template="Your task is to fix only the typos in the attached question without changing the intent of the question. Do not add/remove anything to the question. Classify the question using the classification_criteria provided and provide upto 4 additional followup questions.  "
+            "Use the following guidelines for the task. \n"
+            "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
+            "- Each question must have one group, one topic, and a similarity_score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
+            "-- similarity_score describes how similar is the generated question to the scenario. \n"
+            #"- If no meaningful question can be derived, return n/a for the question. \n"
+            #"- Follow the style and tone of the provided example_questions for followup questions only. \n"
+            #"- Ensure followup questions capture the user's intent and include any specific error/warning messages mentioned. \n" 
+            "- Retain acronyms exactly as given in the scenario. \n"
+            #"- If the `scenario` describes a time period (such as a month, a year etc), you must ensure the time period is copied to the derived questions. \n"
+            #"- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
+            "- If the question is about no income benefits, generate free and low-cost benefits followup questions as well. \n"
+            "- A reference to a number in the question could mean contact number. \n"
+            "- Remove any personal information such as names, IDs, address from the question. \n\n"
+
+    #"example_questions: \n"
+    #    "  [ 'What should I do when APTCs were not applied to a month due to Medicaid termination?', 'I was denied Medicaid, but I have no income, can I apply for Pennie?', 'Why is not pregnancy considered a Qualifying Life Event (QLE)?', 'What is the contact number for Medicaid inquiries?', 'What is the policy for effective date change request', 'What should I do if an AOR calls about a ticket?', 'How do I get status of a ticket?`, 'What do I need to do if a customer is getting an application loop?','How do I unlock an account?','What documents are needed to verify citizenship?','How much time does a consumer have to submit an ROP reinstatement request after notice?', 'How do I provide ticket status to a consumer?']\n\n"
+    #    "\n\n"
+    "classification_criteria: \n"
+        "[ {{'group': 'Tech Aupport, 'topics': ['application updates', 'account creation', 'account unlock', 'password reset', 'account reclaim/access', 'ticket creation', 'consumer portal issues', 'Auth & DUO']}}," 
+        "  {{'group': 'DMI (Data Mismatch Issues)', 'topics':['income sources', 'medicare PDM (Periodic Data Matching', 'ROP(Reasonable Opportunity Period) - APTC (Advance Premium Tax Credit) issues', 'documentation mismatch', 'Medicaid' ]}}," 
+        "  {{'group': 'Eligibility', 'topics' : ['Medicare', 'Medicaid', 'Financial Assistance (APTC,CSR)', 'Qualified Health Plan (QHP)', 'Federal Tax Return (FTR)', 'Affordability rules and estimates', 'QLE/SEP', 'residency']}}," 
+        "  {{'group': 'Account', 'topics' : ['Account Transfer', 'Application submission', 'Remote Identity Proofing (RIDP)', 'Income change', 'address change', 'demographic change', 'payments']}}," 
+        "  {{'group': 'Enrollment assistance', 'topics': ['Reinstatement', 'Retroactive Voluntary termination/cancellation ', 'Prospective voluntary termination/cancellation', 'Financial assistance (APTC/CSR)', 'Coverage effective dates', 'Plan Selection', 'Plan Change', 'Binder payment', 'Enrollment finalizing', 'Net premium change', 'Enrollment Discrepancy with Carrier', 'Renewal', 'Id cards/billing payment']}}," 
+        "  {{'group': 'Miscellaneous', 'topics': [ '1095-A', 'Complaint', 'Appeal', 'Supervisor call request', 'Assister/Broker Training', 'Assister/Broker profile changes' , 'Assistant/Broker Designation', 'Assistant/Broker BOB']}}]\n\n"
+        " \n\n"
+        "ambiguous_scenarios: ['calling ticket', 'income', 'escalate', 'insurance']\n\n"
+    "Wrong format:\n"
+        "[{{\"question\": \"What is the status of ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}}]\n"
+        "Or,\n"
+        "[{{\"question\": \"How to check the status of Ticket #-123456?\", \"group\": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n"
+    "Correct format:\n"
+        "[{{\"question"": \"What does policy states about the status of a ticket?\", \"group\": \"Tech Support\", \"topic\": \"ticket creation\", \"confidence_score\": 10}},"
+          "{{\"question\": \"How to check the status of a Ticket?\", \"group"": \"Tech Support\", \"topic\": \"ticket status\", \"confidence_score\": 10}}]\n\n"
+    "Wrong format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B for Smith Li?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"Do we have medicaid number on file?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"Medicaid\", \"confidence_score\": 9}},"
+         "{{\"question\": \"Why isn't my SEP functioning?\", \"group\": \"Enrollment assistance\", \"topic\": \"SEP\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of TIC-123456's income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "Correct format:\n"
+        "[{{\"question\": \"How to apply for Medicare Part B?\", \"group\": \"Enrollment assistance\", \"topic\": \"Plan Selection\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the contact number for Medicaid inquiries?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"Medicaid\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What are the reasons for not being able to avail my SEP?\", \"group\": \"Enrollment assistance\", \"topic\": \"SEP\", \"confidence_score\": 9}},"
+         "{{\"question\": \"What is the reason for the rejection of income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
+    "\n\n"
+    "Question: {scenario}\n\n",
+)
    # "Your task is to analyze a customer scenario, derive a potential policy and procedure question if any, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
 
 # Child welfare - Department of Social Services
 dss_rewrite_prompt = PromptTemplate(
     input_variables=["scenario", "json_format"],
-    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    #        "Use the following guidelines. \n"
+    template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent. "
+            "If the scenario is a well formed question, only fix the typos if any. Otherwise, derive policy and procedure questions, "
+            "and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
             "Use the following guidelines. \n"
             "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n "
             "- If the scenario describes a question in a meaningful way, use the scenario as is in a question as well. \n"
@@ -376,6 +443,8 @@ ga_rewrite_prompt = PromptTemplate(
 rewrite_prompts = {
     'NV' : csr_rewrite_prompt,
     'PA' : csr_rewrite_prompt,
+    'PA_raw' : csr_rewrite_prompt_raw,
+    'NV_raw' : csr_rewrite_prompt_raw,
     'MO' : dss_rewrite_prompt,
     'GA' : ga_rewrite_prompt
 }
