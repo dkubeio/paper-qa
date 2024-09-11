@@ -174,6 +174,7 @@ system_prompts = {
     'General': "You are a Retrieval Augmented Generation chatbot. Think step by step and answer in a direct and concise tone. ",
     'NV' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, NVHL, for the state of Nevada. Think step by step and answer in a direct and concise tone.\n",
     'PA' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, Pennie, for the state of Pennsylvania. Think step by step and answer in a direct and concise tone.\n",
+    'VA' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, Virginia Health Insurance Marketplace, for the state of Virginia. Think step by step and answer in a direct and concise tone.\n",
     'MO' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
     'GA' : "You are an expert Policy and Manual Management System (PAMMS) Agent Assist in Division of Family and Children Services, DFCS in state of Georgia. Think step by step and answer in a direct and concise tone.\n",
 }
@@ -370,7 +371,8 @@ rewrite_prompts = {
     'NV' : csr_rewrite_prompt,
     'PA' : csr_rewrite_prompt,
     'MO' : dss_rewrite_prompt,
-    'GA' : ga_rewrite_prompt
+    'GA' : ga_rewrite_prompt,
+    'VA' : csr_rewrite_prompt,
 }
 
 
