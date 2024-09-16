@@ -177,6 +177,7 @@ system_prompts = {
     'VA' : "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace, Virginia Health Insurance Marketplace, for the state of Virginia. Think step by step and answer in a direct and concise tone.\n",
     'MO' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
     'GA' : "You are an expert Policy and Manual Management System (PAMMS) Agent Assist in Division of Family and Children Services, DFCS in state of Georgia. Think step by step and answer in a direct and concise tone.\n",
+    "UI": "You are an expert Policy and Manual Management System Agent Assist in the Unemployment Insurance Division. Think step by step and respond in a direct and concise tone. \n",
 }
 
 followup_system_prompt = PromptTemplate(
@@ -332,8 +333,37 @@ ga_rewrite_prompt = PromptTemplate(
     "Scenario: {scenario}\n\n",
 )
 
-    
-    
+ui_rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    template="Your task is to analyze the unemployment insurance-related customer scenario, derive meaningful questions without changing the intent which should also include a policy and procedure question, and suggest up to 4 follow-up questions. Classify each question using the classification_criteria provided. \n"
+            "Use the following guidelines:\n"
+            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. Generate both the variants for each derived question.\n"
+            "- If the scenario describes a question in a meaningful way, use the scenario as is in a question as well.\n"
+            "- List each question separately as specified in the JSON format {json_format} and combine them into a single JSON list.\n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes.\n"
+            "- Each question must have one group, one topic, and a confidence score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Invent new groups or topics as needed. Ensure consistency.\n"
+            "- If no meaningful question can be derived, return n/a for the question.\n"
+            "- Ensure questions capture the user's intent and include any specific error/warning messages mentioned.\n"
+            "- Retain acronyms exactly as given in the scenario.\n"
+            "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question.\n"
+            "- Remove any personal information such as names, IDs from the scenario.\n\n"
+
+    "classification_criteria: \n"
+        "[{{'group':'Claims and Benefits','topics':['Filing a Claim','Weekly Certifications','Monetary Eligibility','Non-Monetary Eligibility','Benefit Payments','Overpayment and Recovery'] }},"
+        "{{'group':'Eligibility and Requirements','topics':['Job Search Requirements','Able and Available to Work','Separation Issues','Work Search Audits','Job Training Programs','Appeals Process'] }},"
+        "{{'group':'Program Policies','topics':['UI Policy Overview','Federal Guidelines','State-Specific Regulations','Benefit Year Provisions','Extended Benefits Programs','Employer Contributions'] }},"
+        "{{'group':'Application Process','topics':['Online Claim Filing','Claim Status Inquiries','Document Submission','Identity Verification','Error Messages and Troubleshooting','Customer Support'] }},"
+        "{{'group':'Fraud Prevention and Security','topics':['Identity Theft Prevention','Fraud Reporting','Overpayment Fraud','System Security','Protecting Personal Information','Unauthorized Claims'] }},"
+        "{{'group':'Payments and Financials','topics':['Payment Methods','Direct Deposit Setup','Tax Withholding','Payment Delays','Payment Corrections','Tax Documents'] }},"
+        "{{'group':'Workforce Programs','topics':['Reemployment Services','Job Training Programs','Work Search Assistance','Career Counseling','Job Placement'] }},"
+        "{{'group':'Employer Responsibilities','topics':['Reporting New Hires','Quarterly Wage Reporting','Employer Contribution Rates','Appeals Against Claims','Workplace Separation Policies','Shared Work Programs'] }},"
+        "{{'group':'Technical Support','topics':['Website Navigation','Account Login Issues','System Errors','Document Upload Issues','Online Chat Assistance'] }}]\n\n"
+
+    "\n\n"
+    "Scenario: {scenario}\n\n",
+)
+
+   
 '''
     "You are an expert Call Center Agent Assist in the public healthcare insurance marketplace. "
     "Your job is to analyze a customer scenario, derive all the policy or procedure subquestions and classify the questions based on some criteria below. "
@@ -373,6 +403,7 @@ rewrite_prompts = {
     'MO' : dss_rewrite_prompt,
     'GA' : ga_rewrite_prompt,
     'VA' : csr_rewrite_prompt,
+    'UI' : ui_rewrite_prompt,
 }
 
 
