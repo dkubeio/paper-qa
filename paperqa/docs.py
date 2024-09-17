@@ -41,6 +41,7 @@ from .utils import (
     maybe_is_pdf,
     maybe_is_text,
     md5sum,
+    fetch_sim_score,
 )
 
 
@@ -1020,6 +1021,32 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
         )
 
+
+    def compare_questions(question1: str, question2: str):
+        compare_chain = make_chain(
+            # Change the prompt
+            self.prompts.compare_question,
+            cast(BaseLanguageModel, self.llm),
+            memory=self.memory_model,
+            # change the system prompt
+            system_prompt=self.prompts.system['compare_qa'],
+        )
+        
+        try:
+            response = await compare_chain.arun(
+                question_1=question1,
+                question_2=question2,
+            )
+        except Exception as e:
+            response= str(e)
+            logging.info(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
+            # rewrite format failures: Use the original question
+
+        sim_score = fetch_sim_score(response)
+
+        return sim_score
+
+
     def get_reference_dict(self, references):
         dict_ = {"references": []}
         i = 1
@@ -1047,7 +1074,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
+        cache_validity = False 
         matches_with_score = []
+        
         try:
             matches_with_score = self.cache_index.similarity_search_with_score(
                 answer.question, k=k, fetch_k=k,
@@ -1065,8 +1094,20 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
-            
-            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+            answer.faq_match_question = matches_with_score[0][0].metadata['question']
+
+            if answer.faq_feedback in ['positive', 'negative']:
+                if answer.faq_vectorstore_score >= 0.9:
+                    cache_validity = True
+                elif answer.faq_vectorstore_score >= 0.8 and answer.faq_vectorstore_score < 0.9:
+                    ques_llm_sim_score = compare_questions(answer.question, answer.faq_match_question)
+                    cache_validity = True if ques_llm_sim_score >= 8 else False 
+                else:
+                    cache_validity = False
+            else:
+                cache_validity = False
+            # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+            if cache_validity:
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
                     answer.references = matches_with_score[0][0].metadata['feedback_sources']
@@ -1086,7 +1127,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
                 answer.faq_doc = matches_with_score[0][0].metadata['doc']
                 answer.trace_id = trace_id
-                answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
                 questions = []
                 if follow_on_questions:
@@ -1159,21 +1199,35 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     stream_json=stream_json,
                 )
             else:
-                answer = await self.aget_evidence(
-                    answer,
-                    k=k,
-                    max_sources=max_sources,
-                    marginal_relevance=marginal_relevance,
-                    get_callbacks=get_callbacks,
-                    disable_answer=disable_answer,
-                    reranker=reranker,
-                    trace_id=trace_id,
-                    state_category=state_category,
-                    designation_category=designation_category,
-                    topic=topic,
-                    follow_on_questions=follow_on_questions,
-                )
-
+                try:
+                    answer = await self.aget_evidence(
+                        answer,
+                        k=k,
+                        max_sources=max_sources,
+                        marginal_relevance=marginal_relevance,
+                        get_callbacks=get_callbacks,
+                        disable_answer=disable_answer,
+                        reranker=reranker,
+                        trace_id=trace_id,
+                        state_category=state_category,
+                        designation_category=designation_category,
+                        topic=topic,
+                        follow_on_questions=follow_on_questions,
+                    )
+                except NoMatchesFoundException as e:
+                    logging.error(f"Error: {e}")
+                    ans_str = "I cannot answer, Please escalate to supervisor or rephrase the question."
+                    
+                    answer = Answer(
+                        question=query,
+                        answer=ans_str,
+                        finline_response=True,
+                        trace_id=trace_id,
+                    )
+                
+                except Exception as e:
+                    logging.error(f"Error: {e}")
+        
         return answer
 
 
