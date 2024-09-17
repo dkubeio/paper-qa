@@ -1306,7 +1306,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 if nquestions == 0 or (nquestions and derived[0]['similarity_score'] < CONFIDENCE_THRESHOLD):
                     # can't answer
                     answer.finline_response = True
-                    answer.answer =f"\nThe original question is ambiguous. "\
+                    answer.answer ="\nThe original question is ambiguous. "\
                                     "Please rephrase or escalate to supervisor. \n\n"
                     
                 else:
