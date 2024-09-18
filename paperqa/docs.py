@@ -1296,7 +1296,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         logging.info(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
         logging.info(f"trace_id:{trace_id} derived_json: {derived_ctx}")
-        try: 
+        try:
             if derived_ctx != "":
                 derived = extract_rewritten_questions(derived_ctx)
                 # Extract and convert follow-up questions to JSON
@@ -1314,12 +1314,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     find_match = None
 
                     for idx, q in enumerate(derived):
-                        if q['question'] == answer.question or \
-                                q['question'].lower().startswith(find_match_prefix):
+                        # if q['question'] == answer.question or \
+                        #         q['question'].lower().startswith(find_match_prefix):
+                        if q['question'] == answer.question:
                             answer.metadata = {'category':q['group'], 'topic':q['topic']}
                             del derived[idx]
                             break
-            
 
                     if answer.metadata is None:
                         idx = 0

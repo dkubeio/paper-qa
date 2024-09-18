@@ -197,8 +197,8 @@ csr_rewrite_prompt = PromptTemplate(
     #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent of the scenario, and suggest upto 4 additional followup questions. Classify each question using the classification_criteria provided.  "
     #        "Use the following guidelines for the task. \n"
     template="Your task is to analyze the customer scenario. "
-            "If the scenario is a well formed question, only fix the typos if any. "
-            "Otherwise, derive meaningful questions without changing the intent. "
+            "If the scenario is a well formed question, fix the typos if any and derive upto 4 followup questions. "
+            "Derive meaningful questions without changing the intent. "
             "Suggest upto 4 followup questions as well. "
             "Use the example_questions below to determine if the scenario is a well formed question. "
             "Classify each question using the classification_criteria provided.  "
@@ -222,15 +222,16 @@ csr_rewrite_prompt = PromptTemplate(
             "- A reference to a number in the scenario could mean contact number. \n"
             "- when ever the words cx/client/my is used, it should be replaced with customer. \n"
             "- Its always the coverage that is terminated, not the customer. if terminated is used with customer, rephrase it with coverage\n"
-            "- Remove any personal information such as names, IDs, address from the scenario. \n"
-            "- Again ensure the output is strictly formatted as a JSON format {json_format} \n\n"
+            "- If the word backdate or back date is used, it should be replaced with effective date change \n"
+            "- Remove any personal information such as names, IDs, address from the scenario. \n\n"
 
-    "example_questions: \n"
+    "example_questions: "
         "  [ 'What should I do when APTCs were not applied to a month due to Medicaid termination?', "
-        " 'Why did my Advanced Premium Tax Credit disappear?', 'Can self-employed individuals get Penny coverage?', "
+        " 'Why did my Advanced Premium Tax Credit disappear?', "
+        # " 'Can self-employed individuals get Penny coverage?', "
         " 'Will I receive a 1095 form if I am enrolled in Medicaid?', "
-        " 'I was denied Medicaid, but I have no income, can I apply for Pennie?',"
-        " 'Why is not pregnancy considered a Qualifying Life Event (QLE)?', "
+        # " 'I was denied Medicaid, but I have no income, can I apply for Pennie?',"
+        " 'Why isn't pregnancy considered a Qualifying Life Event (QLE)?', "
         " 'What is the contact number for Medicaid inquiries?', "
         " 'What is the policy for effective date change request', "
         " 'What should I do if an AOR calls about a ticket?', "
@@ -238,12 +239,13 @@ csr_rewrite_prompt = PromptTemplate(
         " 'Why was my client's coverage terminated?', "
         " 'What do I need to do if a customer is getting an application loop?', "
         " 'How do I unlock an account?', "
+        " 'What is Medicaid contact number?', "
         " 'What documents are needed to verify citizenship?', "
         " 'How much time does a consumer have to submit an ROP reinstatement request after notice?', "
         " 'What should I do if my plan was terminated after removing my husband from enrollment?', "
         " 'How do I provide ticket status to a consumer?' ] \n\n"
-        "\n\n"
-    "classification_criteria: \n"
+
+    "classification_criteria: "
         "[ {{'group': 'Tech Aupport, 'topics': ['application updates', 'account creation', 'account unlock', 'password reset', 'account reclaim/access', 'ticket creation', 'consumer portal issues', 'Auth & DUO']}}," 
         "  {{'group': 'DMI (Data Mismatch Issues)', 'topics':['income sources', 'medicare PDM (Periodic Data Matching', 'ROP(Reasonable Opportunity Period) - APTC (Advance Premium Tax Credit) issues', 'documentation mismatch', 'Medicaid' ]}}," 
         "  {{'group': 'Eligibility', 'topics' : ['Medicare', 'Medicaid', 'Financial Assistance (APTC,CSR)', 'Qualified Health Plan (QHP)', 'Federal Tax Return (FTR)', 'Affordability rules and estimates', 'QLE/SEP', 'residency']}}," 
@@ -270,7 +272,7 @@ csr_rewrite_prompt = PromptTemplate(
          "{{\"question\": \"What are the reasons for not being able to avail my SEP?\", \"group\": \"Enrollment assistance\", \"topic\": \"SEP\", \"confidence_score\": 9}},"
          "{{\"question\": \"What is the reason for the rejection of income change?\", \"group\": \"DMI (Data Mismatch Issues)\", \"topic\": \"income change\", \"confidence_score\": 9}}]\n"
     "\n\n"
-    "Scenario: {scenario}\n\n",
+    "Scenario: {scenario} ",
 )
 
 csr_rewrite_prompt_raw = PromptTemplate(
