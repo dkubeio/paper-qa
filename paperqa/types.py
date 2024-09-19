@@ -141,7 +141,7 @@ class PromptCollection(BaseModel):
         return v
     
     @validator("compare_question")
-    def check_qa(cls, v: PromptTemplate) -> PromptTemplate:
+    def check_compare_question(cls, v: PromptTemplate) -> PromptTemplate:
         if not set(v.input_variables).issubset(set(compare_question_prompt.input_variables)):
             raise ValueError(
                 f"Compare question prompt can only have variables: {compare_question_prompt.input_variables}"
@@ -196,6 +196,8 @@ class Answer(BaseModel):
     finline_response: bool = False
     validated: Optional[bool] = False
     state_category: Optional[str] = "General"
+    ques_sim_score: Optional[float] = None
+    cache_match_validity: Optional[bool] = False
 
     def __str__(self) -> str:
         """Return the answer as a string."""
