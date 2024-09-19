@@ -467,3 +467,4 @@ compare_question_prompt = PromptTemplate(
     {question_2}
     Response: 
     """
+    )
