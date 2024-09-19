@@ -1314,13 +1314,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     
                 else:
                     find_match_prefix = (answer.question.split())[0].lower()
-                    find_match = None
 
                     for idx, q in enumerate(derived):
-                        # if q['question'] == answer.question or \
-                        #         q['question'].lower().startswith(find_match_prefix):
-                        if q['question'] == answer.question:
+                        if q['question'] == answer.question or \
+                                q['question'].lower().startswith(find_match_prefix):
                             answer.metadata = {'category':q['group'], 'topic':q['topic']}
+                            answer.question = q['question']
                             del derived[idx]
                             break
 
