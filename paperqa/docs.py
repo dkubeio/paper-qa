@@ -1022,13 +1022,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         )
 
 
-    def compare_questions(question1: str, question2: str):
+    async def compare_questions(self, question1: str, question2: str):
         compare_chain = make_chain(
-            # Change the prompt
             self.prompts.compare_question,
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
-            # change the system prompt
             system_prompt=self.prompts.system['compare_qa'],
         )
         
@@ -1040,10 +1038,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         except Exception as e:
             response= str(e)
             logging.info(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
-            # rewrite format failures: Use the original question
 
         sim_score = fetch_sim_score(response)
-
+        
         return sim_score
 
 
@@ -1095,18 +1092,25 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
             answer.faq_match_question = matches_with_score[0][0].metadata['question']
+            answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
 
+            answer.ques_sim_score = 0
             if answer.faq_feedback in ['positive', 'negative']:
                 if answer.faq_vectorstore_score >= 0.9:
                     cache_validity = True
                 elif answer.faq_vectorstore_score >= 0.8 and answer.faq_vectorstore_score < 0.9:
-                    ques_llm_sim_score = compare_questions(answer.question, answer.faq_match_question)
-                    cache_validity = True if ques_llm_sim_score >= 8 else False 
+                    ques_llm_sim_score = await self.compare_questions(answer.question, answer.faq_match_question)
+                    answer.ques_sim_score = ques_llm_sim_score 
+                    cache_validity = True if ques_llm_sim_score >= 8 else False
                 else:
                     cache_validity = False
+            elif answer.faq_vectorstore_score >= 0.98:
+                cache_validity = True
             else:
                 cache_validity = False
-            # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+
+            answer.cache_match_validity = cache_validity
+            
             if cache_validity:
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
@@ -1123,7 +1127,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     answer.references = self.get_reference_dict(answer.references)
                     answer.references["id"] = trace_id
 
-                answer.faq_vector_id = matches_with_score[0][0].metadata['_additional']['id']
                 answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
                 answer.faq_doc = matches_with_score[0][0].metadata['doc']
                 answer.trace_id = trace_id
