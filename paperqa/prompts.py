@@ -193,11 +193,7 @@ followup_system_prompt = PromptTemplate(
     "Chat: Question: {previous_question}",
 )
 
-csr_rewrite_prompt = PromptTemplate(
-    input_variables=["scenario", "json_format"],
-    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
-    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent of the scenario, and suggest upto 4 additional followup questions. Classify each question using the classification_criteria provided.  "
-    #        "Use the following guidelines for the task. \n"
+'''
     template="Your task is to analyze the customer scenario. "
             "If the scenario is a well formed question, fix the typos if any and derive upto 4 followup questions. "
             "Derive meaningful questions without changing the intent. "
@@ -227,6 +223,46 @@ csr_rewrite_prompt = PromptTemplate(
             "- If the word backdate or back date is used, it should be replaced with effective date change \n"
             "- Remove any personal information such as names, IDs, address from the scenario. \n\n"
 
+
+'''
+csr_rewrite_prompt = PromptTemplate(
+    input_variables=["scenario", "json_format"],
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent which should also include a policy and procedure question, and suggest upto 4 followup questions. Classify each question using the classification_criteria provided.  "
+    #template="Your task is to analyze the customer scenario, derive meanigful questions without changing the intent of the scenario, and suggest upto 4 additional followup questions. Classify each question using the classification_criteria provided.  "
+    #        "Use the following guidelines for the task. \n"
+    template="Your task is to analyze the scenario and derive upto 4 well formed questions with the same intent. "
+            "Classify each question using the classification_criteria provided.  "
+            "Use the following guidelines for the task. \n"
+            "- Each question must have one group, one topic, and a similarity_score (1-10). Use the classification_criteria below to determine the appropriate group and topic. Do not invent new groups or topics. \n"
+            "- similarity_score measures the similarity of the derived question to the scenario. \n"
+            "- If no meaningful question can be derived, return n/a for the question. \n"
+            "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
+            "- Ensure the output is strictly formatted as a JSON list without any additional text, explanations, or notes. \n"
+            "- Use the example_questions below to determine if the scenario is a well formed question. \n"
+            "- scenarios starting with How, What, Can, Will, Why would typically tend to be a well formed question. \n"
+            "- If the scenario is a well formed question, only fix typos and punctuation to derive the question. \n"
+            #"- Scenarios containing 'What' are Policy scenarios. \n"
+            #"- Scenarios containing 'How' are Procedural scenarios. \n"
+            #"- Scenarios with an action intent are typically Procedural scenarios. \n"
+            #"- Questions starting with 'What' are Policy questions. \n"
+            #"- Questions starting with 'How' are Procedural questions. \n"
+            #"- Questions with an action intent are typically Procedural questions. \n"
+            #"- Generate both policy and procedural variants for each derived question. \n "
+            "- Follow the style and tone of the provided example_questions. \n"
+            #"- Ensure questions capture the scenario's intent and include any specific error/warning messages from the scenario. \n"
+            #"- Ensure questions retain the context from the scenario. \n"
+            "- Retain acronyms exactly as given in the scenario. \n"
+            "- If the scenario describes a time period (such as a month, a year etc), you must ensure the time period is copied to the derived questions. \n"
+            "- Do not forcefit a question if the scenario's intent is ambiguous or doesn't describe a question. \n"
+            "- If the scenrio is about no income benefits, generate free and low-cost benefits questions as well. \n"
+            "- A reference to a number in the scenario could mean contact number. \n"
+            #"- when ever the words cx/client/my is used, it should be replaced with customer. \n"
+            #"- Use the word customer insted of the words cx/client/my in the dervied questions. \n"
+            "- Use coverage and not customer in conjunction with termination in the derived questions. \n"
+            "- Use effective date chage instead of backdate in the dervied questions. \n"
+            "- Remove any personal information such as names, IDs, address from the scenario. \n"
+            "- Retain the nouns that are related to Affordable Care Act (ACA) and Insurance Marketplace exactly as given in the scenario. \n"            
+            "\n"
     "example_questions: "
         "  [ 'What should I do when APTCs were not applied to a month due to Medicaid termination?', "
         " 'Why did my Advanced Premium Tax Credit disappear?', "
