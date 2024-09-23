@@ -1290,6 +1290,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer_text = str(e)
             logging.info(f"trace_id:{trace_id}, rewrite_chain failure: {answer_text}")
             # rewrite format failures: Use the original question
+            answer.question += ' FAIL'
             return answer
 
         end_time = datetime.now()
@@ -1346,6 +1347,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         except Exception as e:
             answer_text = str(e)
             logging.info(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
+            answer.question = derived_ctx + 'FAIL'
             answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
 
         return answer
