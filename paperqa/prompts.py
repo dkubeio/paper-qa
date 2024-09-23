@@ -206,7 +206,7 @@ csr_rewrite_prompt = PromptTemplate(
             "Classify each question using the classification_criteria provided.  "
             "Use the following guidelines for the task. \n"
             "- scenario starting with How, What, Can, Will, Why would typically tend to be well formed question. "
-            "- Policy questions start with 'What is the policy' and procedural questions start with 'How to'. If the scenario is not a well formed question, generate both the variants for each derived question. \n "
+            "- Policy questions start with 'What' and procedural questions start with 'How to'. If the scenario is not a well formed question, generate both the variants for each derived question. \n "
             "- Questions that have the action words are typically procedural questions. \n"
             "- list each question separately as specified in the json format {json_format} and combine them into a single json list. \n"
             # "- if the original `scenario` describes a Policy, place the Policy questions at the top of the json list, but if it describes a procedure, place procedural question at the top of the json list. \n "
