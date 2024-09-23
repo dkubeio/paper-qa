@@ -1307,7 +1307,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             for q in questions:
                 if skip1:
                     skip1 = False
-                elif q['confidence_score'] >= CONFIDENCE_THRESHOLD and \
+                elif q['similarity_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
                         answer.follow_on_questions.append(f"{q['question']}/norewrite")
 
@@ -1323,8 +1323,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.question = remove_suffix(answer.question, "/norewrite")
             return answer
 
+        lcase_question = (answer.question.split())[0].lower()
+        if False and lcase_question.startswith(('how', 'what', 'will', 'can', 'why')):
+            rewrite_prompt = self.prompts.rewrite[answer.state_category+"_raw"]
+            json_format='[{"question": "...","group": "...","topic": "...", "similarity_score": "..."}]'
+        else:
+            rewrite_prompt = self.prompts.rewrite[answer.state_category]
+            json_format='[{"question": "...","group": "...","topic": "...", "similarity_score": "..."}, {"question": "...","group": "...","topic": "...", "similarity_score": "..."}]'
+
         rewrite_chain = make_chain(
-            self.prompts.rewrite[answer.state_category],
+            rewrite_prompt,
             cast(BaseLanguageModel, self.llm),
             memory=self.memory_model,
             system_prompt=self.prompts.system[answer.state_category],
@@ -1335,7 +1343,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         try:
             derived_ctx = await rewrite_chain.arun(
                 scenario=query,
-                json_format='[{"question": "...","group": "...","topic": "...", "confidence_score": "..."}, {"question": "...","group": "...","topic": "...", "confidence_score": "..."}]'
+                json_format=json_format,
                 #callbacks=get_callbacks("rewrite"),
             )
         except Exception as e:
@@ -1348,35 +1356,48 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         logging.info(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
         logging.info(f"trace_id:{trace_id} derived_json: {derived_ctx}")
-        try: 
+        try:
             if derived_ctx != "":
                 derived = extract_rewritten_questions(derived_ctx)
                 # Extract and convert follow-up questions to JSON
                 followup_questions = extract_followup_questions(derived_ctx)
                 nquestions = len(derived)
 
-                if nquestions == 0 or (nquestions and derived[0]['confidence_score'] < CONFIDENCE_THRESHOLD):
+                if nquestions == 0 or (nquestions and derived[0]['similarity_score'] < CONFIDENCE_THRESHOLD):
                     # can't answer
                     answer.finline_response = True
-                    answer.answer =f"\nThe original question is ambiguous. "\
+                    answer.answer ="\nThe original question is ambiguous. "\
                                     "Please rephrase or escalate to supervisor. \n\n"
                     
                 else:
-        
+                    find_match_prefix = (answer.question.split())[0].lower()
+                    find_match = None
+
                     for idx, q in enumerate(derived):
+                        # if q['question'] == answer.question or \
+                        #         q['question'].lower().startswith(find_match_prefix):
                         if q['question'] == answer.question:
                             answer.metadata = {'category':q['group'], 'topic':q['topic']}
                             del derived[idx]
                             break
 
                     if answer.metadata is None:
-                        answer.question = derived[0]['question']
-                        answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
-                        add_followup_questions(answer, derived, skip1=True)
+                        idx = 0
+
+                        answer.question = derived[idx]['question']
+                        answer.metadata = {'category':derived[idx]['group'], 'topic':derived[idx]['topic']}
+                        del derived[idx]
+                        add_followup_questions(answer, derived)
 
                     elif len(derived):
                         add_followup_questions(answer, derived)
-                
+                    '''
+                    answer.question = derived[0]['question']
+                    answer.metadata = {'category':derived[0]['group'], 'topic':derived[0]['topic']}
+                    del derived[0]
+                    add_followup_questions(answer, derived)
+                    '''
+
                 if followup_questions:
                     add_followup_questions(answer, followup_questions)
 
@@ -1498,7 +1519,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
 
             try:
-                # logging.info(f"trace_id:{trace_id} context:{answer.context}")
+                # Comment the next line
+                #logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,
@@ -1510,6 +1532,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             end_time = datetime.now()
             logging.info(f"trace_id:{trace_id} qa-time:{(end_time - start_time).microseconds / 1000}ms")
+
         # it still happens
         if "(Example2012)" in answer_text:
             answer_text = answer_text.replace("(Example2012)", "")
