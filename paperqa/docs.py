@@ -1098,10 +1098,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if answer.faq_feedback in ['positive', 'negative']:
                 if answer.faq_vectorstore_score >= 0.9:
                     cache_validity = True
-                elif answer.faq_vectorstore_score >= 0.8 and answer.faq_vectorstore_score < 0.9:
+                elif answer.faq_vectorstore_score >= 0.85 and answer.faq_vectorstore_score < 0.9:
                     ques_llm_sim_score = await self.compare_questions(answer.question, answer.faq_match_question)
                     answer.ques_sim_score = ques_llm_sim_score 
-                    cache_validity = True if ques_llm_sim_score >= 8 else False
+                    cache_validity = True if ques_llm_sim_score >= 9 else False
                 else:
                     cache_validity = False
             elif answer.faq_vectorstore_score >= 0.98:
