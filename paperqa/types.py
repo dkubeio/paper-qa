@@ -17,7 +17,8 @@ from .prompts import (
     select_paper_prompt,
     summary_prompt,
     rewrite_prompts,
-    followup_system_prompt
+    followup_system_prompt,
+    compare_question_prompt,
 )
 
 StrPath = Union[str, Path]
@@ -86,6 +87,7 @@ class PromptCollection(BaseModel):
     post: Optional[PromptTemplate] = None
     rewrite: Dict[str, str] = rewrite_prompts
     system: Dict[str, str] = system_prompts
+    compare_question: PromptTemplate = compare_question_prompt
     skip_summary: bool = False
 
     @validator("summary")
@@ -137,6 +139,14 @@ class PromptCollection(BaseModel):
                 f"followup_system_prompt prompt can only have variables: {summary_prompt.input_variables}"
             )
         return v
+    
+    @validator("compare_question")
+    def check_compare_question(cls, v: PromptTemplate) -> PromptTemplate:
+        if not set(v.input_variables).issubset(set(compare_question_prompt.input_variables)):
+            raise ValueError(
+                f"Compare question prompt can only have variables: {compare_question_prompt.input_variables}"
+            )
+        return v
 
 
 class Context(BaseModel):
@@ -186,6 +196,8 @@ class Answer(BaseModel):
     finline_response: bool = False
     validated: Optional[bool] = False
     state_category: Optional[str] = "General"
+    ques_sim_score: Optional[float] = None
+    cache_match_validity: Optional[bool] = False
 
     def __str__(self) -> str:
         """Return the answer as a string."""
