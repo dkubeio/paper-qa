@@ -1317,12 +1317,20 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     find_match = None
 
                     for idx, q in enumerate(derived):
-                        # if q['question'] == answer.question or \
-                        #         q['question'].lower().startswith(find_match_prefix):
                         if q['question'] == answer.question:
                             answer.metadata = {'category':q['group'], 'topic':q['topic']}
+                            answer.question = q['question']
                             del derived[idx]
+                            find_match = True
                             break
+   
+                    if not find_match:
+                        for idx, q in enumerate(derived):
+                            if q['question'].lower().startswith(find_match_prefix):
+                                answer.metadata = {'category':q['group'], 'topic':q['topic']}
+                                answer.question = q['question']
+                                del derived[idx]
+                                break
 
                     if answer.metadata is None:
                         idx = 0
