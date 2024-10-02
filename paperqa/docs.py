@@ -61,7 +61,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     llm: Union[str, BaseLanguageModel] = ChatOpenAI(
         temperature=0.1, model="gpt-3.5-turbo", client=None
     )
-    compare_llm: Union[str, BaseLanguageModel] = ChatOpenAI(
+    vllm: Union[str, BaseLanguageModel] = ChatOpenAI(
         temperature=0.1, model="gpt-3.5-turbo", client=None
     )
     summary_llm: Optional[Union[str, BaseLanguageModel]] = None
@@ -116,18 +116,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def update_llm(
         self,
         llm: Union[BaseLanguageModel, str],
-        compare_llm: Union[BaseLanguageModel, str],
+        vllm: Union[BaseLanguageModel, str],
         summary_llm: Optional[Union[BaseLanguageModel, str]] = None,
     ) -> None:
         """Update the LLM for answering questions."""
         if type(llm) is str:
             llm = ChatOpenAI(temperature=0.1, model=llm, client=None)
-        if type(compare_llm) is str:
-            compare_llm = ChatOpenAI(temperature=0.1, model=compare_llm, client=None)
+        if type(vllm) is str:
+            vllm = ChatOpenAI(temperature=0.1, model=vllm, client=None)
         if type(summary_llm) is str:
             summary_llm = ChatOpenAI(temperature=0.1, model=summary_llm, client=None)
         self.llm = cast(BaseLanguageModel, llm)
-        self.compare_llm = cast(BaseLanguageModel, compare_llm)
+        self.vllm = cast(BaseLanguageModel, vllm)
         if summary_llm is None:
             summary_llm = llm
         self.summary_llm = cast(BaseLanguageModel, summary_llm)
@@ -1033,7 +1033,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         compare_chain = make_chain(
             self.prompts.compare_question,
             # cast(BaseLanguageModel, self.llm),
-            cast(BaseLanguageModel, self.compare_llm),
+            cast(BaseLanguageModel, self.vllm),
             memory=self.memory_model,
             system_prompt=self.prompts.system['compare_qa'],
         )
@@ -1342,7 +1342,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         rewrite_chain = make_chain(
             rewrite_prompt,
             # cast(baselanguagemodel, self.llm),
-            cast(BaseLanguageModel, self.compare_llm),
+            cast(BaseLanguageModel, self.vllm),
             memory=self.memory_model,
             system_prompt=self.prompts.system[answer.state_category],
         )
