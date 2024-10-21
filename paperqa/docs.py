@@ -759,7 +759,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.info(f"weaviate category filter:{category_filter}")
             logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
-
+        
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=category_filter
@@ -815,7 +815,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
+        print(f"len matches : {len(matches)}")
         matches = matches[:max_sources]
+        print(f"len matches : {len(matches)}")
         
         # create score for each match
         for i, match in enumerate(matches):
@@ -911,8 +913,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         ext_path=match.metadata["ext_path"],
                         dockey=match.metadata.get("dockey"),
                         doc_source=match.metadata["doc_source"][0],
+                        section_topic=match.metadata["section_topic"],
+                        section_group=match.metadata["section_group"],
                     ),
-                    vector_id=match.metadata["_additional"]["id"]
+                    vector_id=match.metadata["_additional"]["id"],
                 )
                 for idx, match in enumerate(matches)
             ]
