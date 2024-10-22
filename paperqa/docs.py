@@ -815,9 +815,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
 
         # now fnally cut down
-        print(f"len matches : {len(matches)}")
+        # print(f"len matches : {len(matches)}")
         matches = matches[:max_sources]
-        print(f"len matches : {len(matches)}")
+        # print(f"len matches : {len(matches)}")
         
         # create score for each match
         for i, match in enumerate(matches):

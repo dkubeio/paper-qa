@@ -60,6 +60,9 @@ class Text(BaseModel):
     follow_on_question: Optional[bool] = None
     section_topic: Optional[str] = None
     section_group: Optional[str] = None
+    original_chunk: Optional[str] = None
+    original_section: Optional[str] = None
+    summarize: Optional[bool] = False
 
 class Faq_Text(BaseModel):
     question: str
