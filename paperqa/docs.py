@@ -694,7 +694,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         new_matches = []
         new_scores = []
         unique_set = set()
-
+        # print([m.metadata['name'] for m in matches])
+        # print(f"Before : {len(matches)}")
         for m, score in zip(matches, scores):
             # the relevant vectors are already in order, just sorting them
             relevant_vectors = tuple(sorted(m.metadata["relevant_vectors"]))
@@ -702,7 +703,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 new_matches.append(m)
                 new_scores.append(score)
                 unique_set.add(relevant_vectors)
-
+        # print(f"After : {len(new_matches)}")
+        # print([m.metadata['name'] for m in new_matches])
         return new_matches, new_scores
 
 
@@ -736,6 +738,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         designation_category: Optional[Tuple[str]] = None,
         topic: Optional[Tuple[str]] = None,
         follow_on_questions: Optional[bool] = False,
+        derived_topic: Optional[str] = None,
+        derived_category: Optional[str] = None,
     ) -> Answer:
         if disable_vector_search:
             k = k * 10000
@@ -759,11 +763,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             category_filter = self.category_filter_get(state_category, designation_category, topic)
             logging.info(f"weaviate category filter:{category_filter}")
             logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
-        
+                 
             matches_with_score = self.texts_index.similarity_search_with_score(
                 answer.question, k=_k, fetch_k=5 * _k,
                 where_filter=category_filter
             )
+            # print(len(matches_with_score))
             logging.info(f"length of matches with score: {len(matches_with_score)}")
             end_time = datetime.now()
             logging.info(f"trace_id:{trace_id} vector-search-time:{(end_time - start_time).microseconds / 1000} ms")
@@ -813,7 +818,35 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # check if it is already in answer
         cur_names = [c.text.name for c in answer.contexts]
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
+      
+        # breakpoint()
+        # print(len(matches))
+        # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
+        matches_with_topic = []
+        matches_without_topic = []
 
+        for m in matches:
+            # derived_topic = derived_topic.lower() if derived_topic else ''
+            # section_topic = m.metadata["section_topic"].lower() if m.metadata["section_topic"] else ''
+
+            # if derived_topic == section_topic or derived_topic in section_topic:
+            #     matches_with_topic.append(m)
+            # else:
+            #     matches_without_topic.append(m)
+            
+            derived_category = derived_category.lower() if derived_category else ''
+            section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
+            
+            if derived_category == section_category or derived_category in section_category:
+                matches_with_topic.append(m)
+            else:
+                matches_without_topic.append(m)
+
+        # breakpoint()
+        matches = matches_with_topic + matches_without_topic
+        # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
+        # print(len(matches))
+        # breakpoint()
         # now fnally cut down
         # print(f"len matches : {len(matches)}")
         matches = matches[:max_sources]
@@ -1133,6 +1166,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         anchor_flag: Optional[bool] = False,
         follow_on_questions = False,
         stream_json: Optional[bool] = False,
+        derived_topic: Optional[str] = None,
+        derived_category: Optional[str] = None,
     ) -> Answer:
         if k < max_sources:
             raise ValueError("k should be greater than max_sources")
@@ -1176,6 +1211,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     designation_category=designation_category,
                     topic=topic,
                     follow_on_questions=follow_on_questions,
+                    derived_topic=derived_topic,
+                    derived_category=derived_category,
                 )
 
         return answer
@@ -1300,9 +1337,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return answer
 
         end_time = datetime.now()
-
+        
         logging.info(f"trace_id:{trace_id} rewrite-time:{(end_time - start_time).microseconds / 1000}ms")
         logging.info(f"trace_id:{trace_id} derived_json: {derived_ctx}")
+        # breakpoint()
         try:
             if derived_ctx != "":
                 derived = extract_rewritten_questions(derived_ctx)
