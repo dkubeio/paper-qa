@@ -15,6 +15,8 @@ import traceback
 from urllib.parse import quote
 import json
 import re
+import string
+import spacy
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -28,6 +30,7 @@ from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
 from sentence_transformers import CrossEncoder
 from pathlib import Path
+from rank_bm25 import BM25Okapi
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
@@ -246,6 +249,67 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             text_chunks = [x.text for x in texts]
             return docname, text_chunks
         return None, None
+
+    def generate_chunks_nlmatics_sections(
+        self,
+        path: Path,
+        citation: Optional[str] = None,
+        docname: Optional[str] = None,
+        disable_check: bool = False,
+        dockey: Optional[DocKey] = None,
+        chunk_chars: int = 3000,
+        overlap=100,
+        text_splitter: TextSplitter = None,
+        base_dir: Path = None,      
+    ):        
+        if dockey is None:
+            dockey = md5sum(path)
+
+
+        docname = Path(path).parent
+        docname = docname.stem + docname.suffix
+
+        print(f"docname: {docname} path: {path} dockey: {dockey}")
+        fake_doc = Doc(docname=docname, citation="", dockey=dockey)
+
+        # read the path file as json
+        data = None
+        with open(path) as f:
+            data = json.load(f)
+
+        texts = []
+        section_text = ''
+        for section in data:
+            text = section.get('text', "")
+            section_text = text
+            # skip the empty sections
+            if not len(text):
+                continue
+
+            for chunk in text_splitter.split_text(text):
+                texts.append(Text(text=chunk, name=f"{docname}", doc=fake_doc))
+
+        text_chunks = []
+        for text in texts:
+            if text.text:
+                text_chunks.append({
+                    "page": text.name, 
+                    "text_len": len(text.text),
+                    "chunk": text.text, 
+                    "vector_id": str(uuid.uuid4()),
+                    "tokens": text_splitter.count_tokens(text=text.text),
+                    "page_text": text.page_text, 
+                    "page_no" : text.page_no,
+                    "is_table": text.is_table, 
+                    "docname": docname,
+                    "ext_path": text.ext_path,
+                    "doc_source": text.doc_source,
+                    "state_category": text.state_category,
+                    "section": section_text, 
+                    "toolname": "nlmatics"
+                })
+
+        return None, text_chunks
 
 
     def generate_chunks(
@@ -722,6 +786,87 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return questions
 
 
+    def list_word_strings(self, text, combination_length=1):
+        stop_words = [
+            "a", "about", "above", "after", "again", "against", "all", "am", "an",
+            "and", "any", "are", "aren't", "as", "at", "be", "because", "been", #another
+            "before", "being", "below", "between", "both", "but", "by", "can't",
+            "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
+            "doing", "don't", "down", "during", "each", "few", "for", "from",
+            "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having",
+            "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
+            "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
+            "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
+            "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor",
+            "not", "of", "off", "on", "once", "only", "or",  "ought", "our",  #"other"
+            "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
+            "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
+            "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
+            "then", "there", "there's", "these", "they", "they'd", "they'll",
+            "they're", "they've", "this", "those", "through", "to", "too", "under",
+            "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're",
+            "we've", "were", "weren't", "what", "what's", "when", "when's", "where",
+            "where's", "which", "while", "who", "who's", "whom", "why", "why's",
+            "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're",
+            "you've", "your", "yours", "yourself", "yourselves"
+        ]
+
+        # Split the text into words
+        words = text.split()
+        words = [word.strip(string.punctuation) for word in words if word not in stop_words]
+        words = [word.strip() for word in words if word != '']
+
+        #return words
+        word_combinations = []
+
+        # Generate word strings up to length specified by combination_length
+        for length in range(1, combination_length+1):  # lengths from 1 to N
+            for i in range(len(words) - length + 1):
+                word_combination = " ".join(words[i:i+length])
+                word_combinations.append(word_combination)
+
+        return word_combinations
+
+
+    def rerank_matches_using_bm25(self, answer, matches, scores):
+        tokenized_corpus = []
+        nlp = spacy.load("en_core_web_sm")
+        for match in matches:
+            context = match.page_content.lower()
+            context_doc = nlp(context)
+            context_token_list = []
+            for token in context_doc:
+                context_token_list.append(token.lemma_)
+            context = ' '.join(context_token_list)
+            tokenized_corpus.append(self.list_word_strings(context, 2))
+            # tokenized_corpus.append(self.list_word_strings(match.page_content, 2))
+        
+        bm25 = BM25Okapi(tokenized_corpus)
+       
+        question_token_list = []
+        question = answer.question.lower()
+        question_doc = nlp(question)
+       
+        for token in question_doc:
+            question_token_list.append(token.lemma_)
+        
+        question = ' '.join(question_token_list)
+        query_words = self.list_word_strings(question, 2)
+
+        bm25_scores = bm25.get_scores(query_words)
+        scores_with_indices = []
+        for i in range(len(bm25_scores)):
+            scores_with_indices.append([bm25_scores[i], i])
+
+        # sort the score descending
+        scores_with_indices = sorted(scores_with_indices, key=lambda x: x[0], reverse=True)
+        bm25_scores = [0] * len(scores_with_indices)
+        bm25_scores = [s[0] for s in scores_with_indices]
+        new_rerank_of_scores = [scores[s[1]] for s in scores_with_indices]
+        # sort matches with indices in scores_with_indices
+        return [matches[i] for _, i in scores_with_indices], new_rerank_of_scores, bm25_scores 
+
+
     async def aget_evidence(
         self,
         answer: Answer,
@@ -780,6 +925,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # fetch all the scores in a list, sort them in descending order
 
             matches, scores = self.filter_unique_matches(matches_with_score)
+            
+            before_bm25 = []
+            after_bm25 = []
+            # before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
+            # matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
+            # after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
 
             rank = 1
             num_of_log_entries = 10
@@ -824,34 +975,65 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
         matches_with_topic = []
         matches_without_topic = []
+        scores_with_topic = []
+        scores_without_topic = []
+        bm25_scores_with_topic = []
+        bm25_scores_without_topic = []
+        after_cat_reranking = []
 
-        for m in matches:
+        for mno, m in enumerate(matches):
             # derived_topic = derived_topic.lower() if derived_topic else ''
             # section_topic = m.metadata["section_topic"].lower() if m.metadata["section_topic"] else ''
 
             # if derived_topic == section_topic or derived_topic in section_topic:
             #     matches_with_topic.append(m)
+            #     scores_with_topic.append(scores[mno])
+            #     bm25_scores_with_topic.append(bm25_scores[mno])
             # else:
             #     matches_without_topic.append(m)
+            #     scores_without_topic.append(scores[mno])
+            #     bm25_scores_without_topic.append(bm25_scores[mno])
+            
+            # derived_category = derived_category.lower() if derived_category else ''
+            # section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
+            # 
+            # if derived_category == section_category or derived_category in section_category:
+            #     matches_with_topic.append(m)
+            #     scores_with_topic.append(scores[mno])
+            #     bm25_scores_with_topic.append(bm25_scores[mno])
+            # else:
+            #     matches_without_topic.append(m)
+            #     scores_without_topic.append(scores[mno])
+            #     bm25_scores_without_topic.append(bm25_scores[mno])
             
             derived_category = derived_category.lower() if derived_category else ''
             section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
             
             if derived_category == section_category or derived_category in section_category:
                 matches_with_topic.append(m)
+                scores_with_topic.append(scores[mno])
             else:
                 matches_without_topic.append(m)
+                scores_without_topic.append(scores[mno])
 
-        # breakpoint()
+         # breakpoint()
         matches = matches_with_topic + matches_without_topic
+        scores = scores_with_topic + scores_without_topic
+        # bm25_scores = bm25_scores_with_topic + bm25_scores_without_topic
+
+        # after_cat_reranking = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
+        after_cat_reranking = [ (m.metadata['name'], scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
         # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
         # print(len(matches))
         # breakpoint()
         # now fnally cut down
         # print(f"len matches : {len(matches)}")
+        # before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
+        # matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
+        # after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
+
         matches = matches[:max_sources]
         # print(f"len matches : {len(matches)}")
-        
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -1015,6 +1197,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         valid_names = [c.text.name for c in answer.contexts]
         context_str += "\n\nValid keys: " + ", ".join(valid_names)
         answer.context = context_str
+
+        answer.before_bm25 = before_bm25
+        answer.after_bm25 = after_bm25
+        answer.after_category_reranking = after_cat_reranking
         return answer
 
     def query(
