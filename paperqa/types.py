@@ -191,6 +191,9 @@ class Answer(BaseModel):
     finline_response: bool = False
     validated: Optional[bool] = False
     state_category: Optional[str] = "General"
+    before_bm25: Optional[list[str]] = None
+    after_bm25: Optional[list[str]] = None
+    after_category_reranking: Optional[list[str]] = None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
