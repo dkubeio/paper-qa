@@ -1108,9 +1108,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.85):
                 if isinstance(answer.follow_on_questions, list):
-                    answer.follow_on_questions.append(answer.faq_match_question)
+                    answer.follow_on_questions.append(answer.faq_match_question + "/norewrite")
                 else:
-                    answer.follow_on_question = [answer.faq_match_question]
+                    answer.follow_on_question = [answer.faq_match_question + "/norewrite"]
 
         return answer
 
