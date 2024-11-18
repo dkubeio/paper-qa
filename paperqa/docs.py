@@ -1468,7 +1468,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 memory=self.memory_model,
                 system_prompt=self.prompts.system[answer.state_category]
             )
-
+            
+            answer.llm_request = f"{system_prompt_}{qa_prompt}{answer.context}"
+            
             try:
                 # Comment the next line
                 #logging.trace(f"trace_id:{trace_id} context:{answer.context}")
