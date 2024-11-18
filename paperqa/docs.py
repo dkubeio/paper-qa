@@ -1469,6 +1469,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 system_prompt=self.prompts.system[answer.state_category]
             )
             
+            system_prompt_ = qa_chain.prompt.messages[0].content
+            qa_prompt = qa_chain.prompt.messages[1].prompt.template
             answer.llm_request = f"{system_prompt_}{qa_prompt}{answer.context}"
             
             try:
