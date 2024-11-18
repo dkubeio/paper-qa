@@ -1104,17 +1104,17 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     
                     questions = self.get_followon_questions(answer, matches, max_sources)
 
-                if isinstance(answer.follow_on_questions, list):
+                try:
                     answer.follow_on_questions += questions
-                else:
+                except (AttributeError, TypeError): 
                     answer.follow_on_questions = questions
                     
             else:
                 if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.85):
                     matched_question = matches_with_score[0][0].metadata['question']
-                    if isinstance(answer.follow_on_questions, list):
+                    try:
                         answer.follow_on_questions.append(matched_question + "/norewrite")
-                    else:
+                    except (AttributeError, TypeError): 
                         answer.follow_on_questions = [matched_question + "/norewrite"]
 
         return answer
