@@ -1044,6 +1044,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
+
+        if answer.question.endswith(("//dc", "//dc?", "//dc ?")):
+            # Todo: Use LLM to just create topic & category
+            answer.question = self.remove_suffix(answer.question, "//dc")
+            answer.faq_vectorstore_score = 0.0
+
+            return answer
+        
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
@@ -1188,6 +1196,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return answer
 
 
+    def remove_suffix(self, text, match):
+        index = text.rfind(match)
+        if index == -1:
+            logging.info(f"trace_id:{trace_id}, Remove suffex faild.")
+        else:
+            text_before_match = text[:index].strip()
+            text_after_match = text[index + len(match):].strip()
+            text = text_before_match + text_after_match
+        
+        return text
+
+
     async def rewrite_query(
         self,
         query: str,
@@ -1199,12 +1219,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     ) ->  dict:  
 
         CONFIDENCE_THRESHOLD = 5 #out of 10 for a rewrite
-        def remove_suffix(text, match):
-            index = text.rfind(match)
-            if index == -1:
-                return text
-            else:
-                return text[:index].strip()
 
         def extract_followup_questions(text):
             """
@@ -1272,9 +1286,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.follow_on_questions = []
         answer.state_category = state_category[0] if state_category else 'General'
 
-        if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+        # if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+        if answer.question.endswith(('//dc/norewrite', '//dc/norewrite ?', '//dc/norewrite?', '/norewrite//dc', '/norewrite//dc?', '/norewrite//dc ?')):
             # Todo: Use LLM to just create topic & category
-            answer.question = remove_suffix(answer.question, "/norewrite")
+            answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
 
         lcase_question = (answer.question.split())[0].lower()
