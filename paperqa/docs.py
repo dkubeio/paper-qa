@@ -1045,9 +1045,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
 
-        if answer.question.endswith(("//dc", "//dc?", "//dc ?")):
+        if answer.question.endswith(("/nocache", "/nocache?", "/nocache ?")):
             # Todo: Use LLM to just create topic & category
-            answer.question = self.remove_suffix(answer.question, "//dc")
+            answer.question = self.remove_suffix(answer.question, "/nocache")
             answer.faq_vectorstore_score = 0.0
 
             return answer
@@ -1073,7 +1073,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
-            
+            print("**"*10)
+            print(f"Score : {answer.faq_vectorstore_score}")
+            print(f"Matched Question : {matches_with_score[0][0].metadata['question']}")
+            print(f"feedback : {answer.faq_feedback}")
+            print("**"*10)
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
@@ -1287,7 +1291,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.state_category = state_category[0] if state_category else 'General'
 
         # if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
-        if answer.question.endswith(('//dc/norewrite', '//dc/norewrite ?', '//dc/norewrite?', '/norewrite//dc', '/norewrite//dc?', '/norewrite//dc ?')):
+        if answer.question.endswith(('/nocache/norewrite', '/nocache/norewrite ?', '/nocache/norewrite?', '/norewrite/nocache', '/norewrite/nocache?', '/norewrite/nocache ?')):
             # Todo: Use LLM to just create topic & category
             answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
