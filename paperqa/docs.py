@@ -1044,14 +1044,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
 
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
-
-        # if answer.question.endswith(("/nocache", "/nocache?", "/nocache ?")):
-        #     # Todo: Use LLM to just create topic & category
-        #     answer.question = self.remove_suffix(answer.question, "/nocache")
-        #     answer.faq_vectorstore_score = 0.0
-
-        #     return answer
-        
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
@@ -1073,11 +1065,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
-            print("**"*10)
-            print(f"Score : {answer.faq_vectorstore_score}")
-            print(f"Matched Question : {matches_with_score[0][0].metadata['question']}")
-            print(f"feedback : {answer.faq_feedback}")
-            print("**"*10)
+            
             if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
