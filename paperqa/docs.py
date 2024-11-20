@@ -1045,12 +1045,12 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
 
-        if answer.question.endswith(("/nocache", "/nocache?", "/nocache ?")):
-            # Todo: Use LLM to just create topic & category
-            answer.question = self.remove_suffix(answer.question, "/nocache")
-            answer.faq_vectorstore_score = 0.0
+        # if answer.question.endswith(("/nocache", "/nocache?", "/nocache ?")):
+        #     # Todo: Use LLM to just create topic & category
+        #     answer.question = self.remove_suffix(answer.question, "/nocache")
+        #     answer.faq_vectorstore_score = 0.0
 
-            return answer
+        #     return answer
         
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
