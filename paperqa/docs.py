@@ -1282,7 +1282,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 elif q['similarity_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
                         answer.follow_on_questions.append(f"{q['question']}/norewrite")
-
+        
         followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
@@ -1295,7 +1295,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # Todo: Use LLM to just create topic & category
             answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
-
+        
+        if query.endswith(('/nocache', '/nocache ?', '/nocache?')):
+            # Todo: Use LLM to just create topic & category
+            query = self.remove_suffix(query, "/nocache")
+        
         lcase_question = (answer.question.split())[0].lower()
         if False and lcase_question.startswith(('how', 'what', 'will', 'can', 'why')):
             rewrite_prompt = self.prompts.rewrite[answer.state_category+"_raw"]
