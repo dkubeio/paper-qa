@@ -1188,6 +1188,18 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         return answer
 
 
+    def remove_suffix(self, text, match):
+        index = text.rfind(match)
+        if index == -1:
+            logging.info(f"trace_id:{trace_id}, Remove suffex faild.")
+        else:
+            text_before_match = text[:index].strip()
+            text_after_match = text[index + len(match):].strip()
+            text = text_before_match + text_after_match
+        
+        return text
+
+
     async def rewrite_query(
         self,
         query: str,
@@ -1199,12 +1211,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     ) ->  dict:  
 
         CONFIDENCE_THRESHOLD = 5 #out of 10 for a rewrite
-        def remove_suffix(text, match):
-            index = text.rfind(match)
-            if index == -1:
-                return text
-            else:
-                return text[:index].strip()
 
         def extract_followup_questions(text):
             """
@@ -1264,7 +1270,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 elif q['similarity_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
                         answer.follow_on_questions.append(f"{q['question']}/norewrite")
-
+        
         followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
@@ -1272,11 +1278,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.follow_on_questions = []
         answer.state_category = state_category[0] if state_category else 'General'
 
-        if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+        # if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
+        if answer.question.endswith(('/nocache/norewrite', '/nocache/norewrite ?', '/nocache/norewrite?', '/norewrite/nocache', '/norewrite/nocache?', '/norewrite/nocache ?')):
             # Todo: Use LLM to just create topic & category
-            answer.question = remove_suffix(answer.question, "/norewrite")
+            answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
-
+        
+        if query.endswith(('/nocache', '/nocache ?', '/nocache?')):
+            # Todo: Use LLM to just create topic & category
+            query = self.remove_suffix(query, "/nocache")
+        
         lcase_question = (answer.question.split())[0].lower()
         if False and lcase_question.startswith(('how', 'what', 'will', 'can', 'why')):
             rewrite_prompt = self.prompts.rewrite[answer.state_category+"_raw"]
