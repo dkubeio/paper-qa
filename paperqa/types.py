@@ -58,6 +58,11 @@ class Text(BaseModel):
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
     follow_on_question: Optional[bool] = None
+    section_topic: Optional[str] = None
+    section_group: Optional[str] = None
+    original_chunk: Optional[str] = None
+    original_section: Optional[str] = None
+    summarize: Optional[bool] = False
 
 class Faq_Text(BaseModel):
     question: str
@@ -186,6 +191,9 @@ class Answer(BaseModel):
     finline_response: bool = False
     validated: Optional[bool] = False
     state_category: Optional[str] = "General"
+    before_bm25: Optional[list[str]] = None
+    after_bm25: Optional[list[str]] = None
+    after_category_reranking: Optional[list[str]] = None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
