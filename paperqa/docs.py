@@ -1060,7 +1060,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
        
         if not matches_with_score:
             answer.faq_vectorstore_score = 0.0
-        
+
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
@@ -1279,7 +1279,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.state_category = state_category[0] if state_category else 'General'
 
         # if answer.question.endswith(("/norewrite", "/norewrite?", "/norewrite ?")):
-        if answer.question.endswith(('/nocache/norewrite', '/nocache/norewrite ?', '/nocache/norewrite?', '/norewrite/nocache', '/norewrite/nocache?', '/norewrite/nocache ?')):
+        if answer.question.endswith(('/nocache/norewrite', '/nocache/norewrite ?', '/nocache/norewrite?', '/norewrite/nocache', '/norewrite/nocache?', '/norewrite/nocache ?', '/norewrite', '/norewrite ?', '/norewrite?')):
             # Todo: Use LLM to just create topic & category
             answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
