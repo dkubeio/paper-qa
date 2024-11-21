@@ -179,6 +179,7 @@ system_prompts = {
     'MO' : "You are an expert Child Welfare Agent Assist in Missouri Department of Social Services, DSS. Think step by step and answer in a direct and concise tone.\n",
     'GA' : "You are an expert Policy and Manual Management System (PAMMS) Agent Assist in Division of Family and Children Services, DFCS in state of Georgia. Think step by step and answer in a direct and concise tone.\n",
     "UI": "You are an expert Policy and Manual Management System Agent Assist in the Unemployment Insurance Division. Think step by step and respond in a direct and concise tone. \n",
+    "compare_qa": "You are an expert question analyzer. Think step by step and respond in a direct and concise tone. \n",
 }
 
 followup_system_prompt = PromptTemplate(
@@ -538,3 +539,30 @@ rewrite_prompt = PromptTemplate(
     
     "scenario: {scenario}\n\n",
 )
+
+
+compare_question_prompt = PromptTemplate( 
+    input_variables=["question_1", "question_2"],
+    template="""
+    Compare the following two questions and rate their similarity on a scale of 1-10, where:
+
+    1 indicates they are completely different in meaning and context,
+    10 indicates they are almost identical or fully similar in meaning and context.
+
+    Consider the following aspects in your rating:
+
+    Do both questions seek the same or very similar information?
+    Are the contexts of both questions aligned (e.g., same topic, subject matter)?
+    Is the phrasing similar, even if expressed differently?
+    How closely do the intents of the two questions match?
+
+    Strictly give score in this format 'Score: [[score]]/10' for example 'Score: 8/10'
+
+    Question 1:
+    {question_1}
+
+    Question 2:
+    {question_2}
+    Response: 
+    """
+    )

@@ -97,3 +97,35 @@ def get_llm_name(llm: BaseLanguageModel) -> str:
         return llm.model_name  # type: ignore
     except AttributeError:
         return llm.model  # type: ignore
+
+
+def fetch_sim_score(answer: str):
+    patterns = [r"Score: (\[[0-9]\])", r"Score: (\d+.*)", r"Score: (\[\[[0-9]\]\])", r"Score:(\[[0-9]\])", r"Score:(\d+.*)", r"Score:(\[\[[0-9]\]\])", r"(\d+.*)"]
+    k = 0
+    match = None
+    sim_score = 'na' 
+    
+    while(k < len(patterns) and not match):
+        try:
+            match = re.search(patterns[k], answer)
+        except:
+            match = None
+        k = k + 1
+
+    if match:
+        sim_score = match.group(1)
+        sim_score = sim_score.split(' ')[0] if sim_score.split(' ') else sim_score
+        if sim_score.endswith('.'):
+            sim_score = sim_score[:-1]
+        try:
+            sim_score = float(sim_score.strip('[').strip(']'))
+        except:
+            try:
+                sim_score = float(sim_score.split(':')[0].split('/')[0].strip())
+            except:
+                print(f"ERROR: In retrieving llm_score, {sim_score}")
+                sim_score = 'na' 
+    else:
+        print(f"Error: Did not found match, \n{answer}\n-----")
+
+    return sim_score
