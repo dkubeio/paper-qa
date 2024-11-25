@@ -1066,7 +1066,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
             
-            if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+            # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
+            if answer.faq_vectorstore_score >= 0.90:
                 if answer.faq_feedback == 'negative':
                     answer.answer = matches_with_score[0][0].metadata['feedback_answer']
                     answer.references = matches_with_score[0][0].metadata['feedback_sources']
@@ -1110,12 +1111,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     answer.follow_on_questions = questions
                     
             else:
-                if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.85):
-                    matched_question = matches_with_score[0][0].metadata['question']
-                    try:
-                        answer.follow_on_questions.append(matched_question + "/norewrite")
-                    except (AttributeError, TypeError): 
-                        answer.follow_on_questions = [matched_question + "/norewrite"]
+                for m in matches_with_score:
+                    # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.85):
+                    if answer.faq_vectorstore_score >= 0.85:
+                        matched_question = m[0].metadata['question']
+                        try:
+                            answer.follow_on_questions.append(matched_question + "/norewrite")
+                        except (AttributeError, TypeError): 
+                            answer.follow_on_questions = [matched_question + "/norewrite"]
+                
+                answer.is_suggestion = True
 
         return answer
 
