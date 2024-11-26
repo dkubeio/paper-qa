@@ -1065,6 +1065,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
+            answer.faq_match_question = matches_with_score[0][0].metadata['question']
             
             # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
             if answer.faq_vectorstore_score >= 0.90:
@@ -1087,7 +1088,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 answer.parent_req_id = matches_with_score[0][0].metadata['trace_id']
                 answer.faq_doc = matches_with_score[0][0].metadata['doc']
                 answer.trace_id = trace_id
-                answer.faq_match_question = matches_with_score[0][0].metadata['question']
 
                 questions = []
                 if follow_on_questions:
@@ -1111,16 +1111,16 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     answer.follow_on_questions = questions
                     
             else:
-                for m in matches_with_score:
-                    # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.85):
-                    if answer.faq_vectorstore_score >= 0.85:
-                        matched_question = m[0].metadata['question']
-                        try:
-                            answer.follow_on_questions.append(matched_question + "/norewrite")
-                        except (AttributeError, TypeError): 
-                            answer.follow_on_questions = [matched_question + "/norewrite"]
-                
-                answer.is_suggestion = True
+                if answer.faq_vectorstore_score >= 0.85:
+                    for m_no, m in enumerate(matches_with_score):
+                        if m[1] >= 0.85:
+                            matched_question = m[0].metadata['question']
+                            try:
+                                answer.follow_on_questions.insert(0 + m_no, matched_question + "/norewrite")
+                            except (AttributeError, TypeError): 
+                                answer.follow_on_questions = [matched_question + "/norewrite"]
+                        
+                    answer.is_suggestion = True
 
         return answer
 
@@ -1275,7 +1275,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 elif q['similarity_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
                         answer.follow_on_questions.append(f"{q['question']}/norewrite")
-        
+            
         followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
