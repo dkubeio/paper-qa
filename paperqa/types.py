@@ -186,6 +186,7 @@ class Answer(BaseModel):
     finline_response: bool = False
     validated: Optional[bool] = False
     state_category: Optional[str] = "General"
+    is_suggestion: Optional[str] = None
 
     def __str__(self) -> str:
         """Return the answer as a string."""
