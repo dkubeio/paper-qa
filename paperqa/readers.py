@@ -8,9 +8,12 @@ import fitz
 from html2text import html2text
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TextSplitter
+from torch import embedding
 from .types import Doc, Text
 from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
-
+from numpy import ndarray
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
@@ -139,6 +142,84 @@ def parse_txt(
     # ]
     return texts
 
+
+def guess_the_page_no(
+    text: str, page_embeddings: Dict[int, np.ndarray], model: SentenceTransformer
+) -> int:
+    text_embedding = model.encode(text)
+
+    page_similarity = []
+    for page_embedding in page_embeddings:
+        pg_embedding = page_embedding.get("embedding")
+        page_similarity.append(
+            np.dot(text_embedding, pg_embedding)
+            / (np.linalg.norm(text_embedding) * np.linalg.norm(pg_embedding))
+        )
+
+    # return the page number of the page with the highest similarity
+    if page_similarity:
+        return page_similarity.index(max(page_similarity)) + 1
+
+    return 0
+
+
+def get_embeddings_for_pages(
+    pages: List[Dict[str, Union[str, int]]], model: SentenceTransformer
+) -> Dict[int, np.ndarray]:
+
+    page_embeddings = []
+    for page in pages:
+        page_text = page.get("page_text")
+        page_no = page.get("page_no")
+        page_embedding = model.encode(page_text)
+        page_embeddings.append({"page_no": page_no, "embedding": page_embedding})
+
+    return page_embeddings
+
+
+def handle_pixtral_json_files(
+    pixtral_content_file: Path,
+    doc: Doc,
+    text_splitter: TextSplitter = None,
+) -> List[Text]:
+
+    print(f"Handling pixtral json file: {pixtral_content_file}")
+
+    with open(pixtral_content_file, "r") as f:
+        pixtral_content = json.load(f)
+
+    if pixtral_content["type"] != "ocr-pixtral-doc":
+        print(
+            f"File {pixtral_content_file} -  {pixtral_content['type']} is not a pixtral json file"
+        )
+        return []
+
+    # load the embedding model
+    model = SentenceTransformer("BAAI/bge-m3")
+
+    # get the text from the pixtral content
+    doc_content = pixtral_content["data"]["document"]
+    docname = Path(pixtral_content_file).parent.name
+    split_texts = text_splitter.split_text(doc_content)
+    page_embeddings = get_embeddings_for_pages(pixtral_content["data"]["pages"], model)
+
+    texts = []
+    for text in split_texts:
+        page_no = guess_the_page_no(text, page_embeddings, model)
+        texts.append(
+            Text(
+                text=text,
+                name=f"{docname} pages {page_no}",
+                doc=doc,
+                page_text=text,
+                is_table=False,
+                page_no=page_no
+            )
+        )
+
+    return texts
+
+
 def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None, categories: str=None
@@ -154,9 +235,12 @@ def parse_json(
     except UnicodeDecodeError:
         with open(path, encoding="utf-8", errors="ignore") as f:
             file_contents = f.read()
+ 
+    json_contents = json.loads(file_contents)
+    if json_contents.get("type") == "ocr-pixtral-doc":
+        return handle_pixtral_json_files(path, doc, text_splitter)
 
     json_contents = json.loads(file_contents)
-    texts = []
     if "is_pdf" in json_contents:
         is_table = json_contents.get('is_table')
         is_toc = json_contents.get('is_toc')
@@ -166,6 +250,7 @@ def parse_json(
         docname = Path(path).parent.name
         ext_path = json_contents.get('ext_path')
         raw_texts = text_splitter.split_text(page_text)
+
         if not is_toc:
             texts = [
                 Text(text=t, name=f"{docname} pages {page_no}", doc=doc, page_text=page_text, is_table=is_table,
