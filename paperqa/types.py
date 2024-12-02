@@ -32,6 +32,7 @@ class Doc(BaseModel):
     citation: str
     dockey: DocKey
 
+
 class WebScrapedMetaData(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now)
     scraped_date: datetime = Field(default_factory=datetime.now)
@@ -42,11 +43,21 @@ class WebScrapedMetaData(BaseModel):
 
 class SharepointPageMetaData(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now)
-    scraped_date: datetime = Field(default_factory=datetime.now)
+    downloaded_date: datetime = Field(default_factory=datetime.now)
+    sharepoint_site: str
+    sharepoint_path: str
+    id: str
     url: str
-    domain: str
-    topic: str
-    title: str
+
+
+class SharepointDocumentMetaData(BaseModel):
+    last_updated: datetime = Field(default_factory=datetime.now)
+    downloaded_date: datetime = Field(default_factory=datetime.now)
+    sharepoint_site: str
+    sharepoint_path: str
+    id: str
+    url: str
+    quickXorHash: str
 
 
 class Metadata(BaseModel):
