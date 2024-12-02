@@ -140,6 +140,42 @@ def parse_txt(
     return texts
 
 
+def parse_extracted_pdf_file(
+    path: Path, doc: Doc, chunk_chars: int, overlap: int,
+    text_splitter: TextSplitter=None, categories: str=None
+) -> List[Text]:
+    try:
+        with open(path) as f:
+            file_contents = f.read()
+
+        json_contents = json.loads(file_contents)
+        text = json_contents['data']['page_text']
+        doc_name = json_contents['metadata']['name']
+        ext_path = json_contents['metadata']['url']
+
+        metadata = Metadata(
+            type=json_contents['type'],
+            data=json_contents['metadata']
+        )
+
+        raw_texts = text_splitter.split_text(text)
+        texts = [
+            Text(
+                text=t,
+                name=f"{doc_name}",
+                doc=doc,
+                ext_path=ext_path,
+                metadata=metadata,
+            )
+            for i, t in enumerate(raw_texts)
+        ]
+        return texts
+    except Exception as e:
+        print(f"Error in parse_extracted_pdf_file: {e}")
+
+    return []
+
+
 def parse_webscraped_article(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None, categories: str=None
@@ -194,6 +230,10 @@ def parse_json(
     json_contents = json.loads(file_contents)
     if json_contents.get("type") == "web_scraped_data":
         return parse_webscraped_article(
+            path, doc, chunk_chars, overlap, text_splitter, categories
+        )
+    elif json_contents.get("type") == "pdf_extracted_unstructured":
+        return parse_extracted_pdf_file(
             path, doc, chunk_chars, overlap, text_splitter, categories
         )
 
