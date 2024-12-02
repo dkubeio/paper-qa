@@ -1,3 +1,4 @@
+from importlib import metadata
 import json
 import re
 import traceback
@@ -8,9 +9,8 @@ import fitz
 from html2text import html2text
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TextSplitter
-from .types import Doc, Text
+from .types import Doc, Text, Metadata
 from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
-
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
@@ -139,12 +139,48 @@ def parse_txt(
     # ]
     return texts
 
+
+def parse_webscraped_article(
+    path: Path, doc: Doc, chunk_chars: int, overlap: int,
+    text_splitter: TextSplitter=None, categories: str=None
+) -> List[Text]:
+    try:
+        with open(path) as f:
+            file_contents = f.read()
+
+        json_contents = json.loads(file_contents)
+        text = json_contents['data']['title'] + " " + json_contents['data']['text']
+        doc_name = json_contents['metadata']['url']
+        ext_path = json_contents['metadata']['url']
+
+        metadata = Metadata(
+            type=json_contents['type'],
+            data=json_contents['metadata']
+        )
+
+        raw_texts = text_splitter.split_text(text)
+        texts = [
+            Text(
+                text=t,
+                name=f"{doc_name}",
+                doc=doc,
+                ext_path=ext_path,
+                metadata=metadata,
+            )
+            for i, t in enumerate(raw_texts)
+        ]
+        return texts
+    except Exception as e:
+        print(f"Error in parse_webscraped_article: {e}")
+
+    return []
+
 def parse_json(
     path: Path, doc: Doc, chunk_chars: int, overlap: int,
     text_splitter: TextSplitter=None, categories: str=None
 ) -> List[Text]:
     if text_splitter is None:
-            text_splitter = RecursiveCharacterTextSplitter(
+        text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_chars, chunk_overlap=overlap,
                 length_function=len, is_separator_regex=False,
             )
@@ -156,6 +192,11 @@ def parse_json(
             file_contents = f.read()
 
     json_contents = json.loads(file_contents)
+    if json_contents.get("type") == "web_scraped_data":
+        return parse_webscraped_article(
+            path, doc, chunk_chars, overlap, text_splitter, categories
+        )
+
     texts = []
     if "is_pdf" in json_contents:
         is_table = json_contents.get('is_table')

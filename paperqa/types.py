@@ -7,7 +7,8 @@ from langchain.callbacks.manager import (
     CallbackManagerForChainRun,
 )
 from langchain.prompts import PromptTemplate
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, Field
+from datetime import datetime
 
 from .prompts import (
     citation_prompt,
@@ -31,6 +32,29 @@ class Doc(BaseModel):
     citation: str
     dockey: DocKey
 
+class WebScrapedMetaData(BaseModel):
+    last_updated: datetime = Field(default_factory=datetime.now)
+    scraped_date: datetime = Field(default_factory=datetime.now)
+    url: str
+    domain: str
+    topic: str
+
+
+class SharepointPageMetaData(BaseModel):
+    last_updated: datetime = Field(default_factory=datetime.now)
+    scraped_date: datetime = Field(default_factory=datetime.now)
+    url: str
+    domain: str
+    topic: str
+    title: str
+
+
+class Metadata(BaseModel):
+    type : str
+    data: Union[WebScrapedMetaData, SharepointPageMetaData]
+
+    def to_json(self):
+        return self.json()
 
 class Text(BaseModel):
     text: str
@@ -58,6 +82,8 @@ class Text(BaseModel):
     ext_path: Optional[str] = None
     doc_source: Optional[str] = None
     follow_on_question: Optional[bool] = None
+    metadata: Optional[Metadata] = None
+
 
 class Faq_Text(BaseModel):
     question: str
