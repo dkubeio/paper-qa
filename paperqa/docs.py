@@ -1,4 +1,5 @@
 import asyncio
+from curses import meta
 import json
 import logging
 import os
@@ -247,7 +248,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             return docname, text_chunks
         return None, None
 
-
     def generate_chunks(
         self,
         path: Path,
@@ -387,7 +387,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         else:
             text_embeddings = cast(List[List[float]], [t.embeddings for t in texts])
 
-
         vector_ids = [x.vector_id for x in texts]
         if self.texts_index is not None and not sllm_qna:
             try:
@@ -401,11 +400,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         map(lambda x: (x.text, x.embeddings), texts)
                     )
 
-                
                 self.texts_index.add_embeddings(  # type: ignore
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
-                    metadatas=[t.dict(exclude={"embeddings", "text"}) for t in texts],
+                    metadatas=[json.loads(t.json(exclude={"embeddings", "text"})) for t in texts],
                 )
 
                 self.texts += texts
@@ -417,21 +415,31 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 vec_store_text_and_embeddings = list(
                     map(lambda x: (x.answer, x.embeddings), texts)
                 )
-                
+
                 self.cache_index.add_embeddings(
                     vec_store_text_and_embeddings,
                     ids=vector_ids,
                     metadatas=[t.dict(exclude={"embeddings", "answer"}) for t in texts],
                 )
-            
+
                 self.texts += texts
             except AttributeError:
                 raise ValueError("Need a vector store that supports adding faq embeddings")
 
         if not sllm_qna:
             if self.doc_index is not None:
-                #self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
-                self.doc_index.add_texts(texts=[json.dumps(doc, default=vars)], metadatas=[doc.dict()])
+                # self.doc_index.add_texts([doc.citation], metadatas=[doc.dict()])
+                doc_dict = json.loads(doc.json())
+                metadata = doc_dict["metadata"]
+                doc_dict['type'] = metadata['type']
+
+                for k, v in metadata['data'].items():
+                    doc_dict[k] = v
+
+                self.doc_index.add_texts(
+                    texts=[json.dumps(doc_dict)],
+                    metadatas=[doc_dict],
+                )
 
             self.docs[doc.dockey] = doc
             if self.texts_index is None:
@@ -473,7 +481,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         if self.texts_index is not None:
             for doc in doc_list:
                 self.texts_index.delete_by_attribute({'name':doc.docname})
-
 
     async def adoc_match(
         self,
@@ -604,8 +611,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     def category_filter_get(self, state_category: Tuple[str], designation_category: Tuple[str], topics: Optional[Tuple[str]] = None):
         category_filter = None
 
-
-        
         if state_category and designation_category:
             # if the designation is broker add consumer to the designation category
             if "Broker" in designation_category:
@@ -650,9 +655,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     }]
                 }
 
-
         return category_filter
-
 
     def get_evidence(
         self,
@@ -693,7 +696,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         scores = sorted([m[1] for m in matches_with_score], reverse=True)
         matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
         matches = [match_with_score[0] for match_with_score in matches_with_score]
-        
+
         new_matches = []
         new_scores = []
         unique_set = set()
@@ -708,7 +711,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return new_matches, new_scores
 
-
     def get_followon_questions(self,answer, matches, max_sources):
         questions = []
         idx = 0
@@ -719,9 +721,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     questions.append(embed_text)
 
             idx += 1
-        
-        return questions
 
+        return questions
 
     async def aget_evidence(
         self,
@@ -799,7 +800,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         answer.follow_on_questions = questions
 
         # ok now filter
-        #if answer.dockey_filter is not None:
+        # if answer.dockey_filter is not None:
         #    matches = [
         #        m
         #        for m in matches
@@ -819,7 +820,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         # now fnally cut down
         matches = matches[:max_sources]
-        
+
         # create score for each match
         for i, match in enumerate(matches):
             match.metadata["score"] = 0
@@ -965,7 +966,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 # filter out failures
                 contexts = [c for c in results if c is not None]
 
-    
         answer.contexts = sorted(
             contexts + answer.contexts, key=lambda x: x.score, reverse=True
         )
@@ -1045,11 +1045,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return dict_
 
-
     async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
         category_filter = self.category_filter_get(state_category, designation_category)
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
-       
+
         matches_with_score = []
         try:
             matches_with_score = self.cache_index.similarity_search_with_score(
@@ -1060,7 +1059,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             print(f"ERROR: error in searching in cache, {e}")
             answer.faq_vectorstore_score = 0.0
             # return answer
-       
+
         if not matches_with_score:
             answer.faq_vectorstore_score = 0.0
 
@@ -1069,7 +1068,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
             answer.faq_match_question = matches_with_score[0][0].metadata['question']
-            
+
             # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
             if answer.faq_vectorstore_score >= 0.90:
                 if answer.faq_feedback == 'negative':
@@ -1105,14 +1104,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     for m in matches:
                         if isinstance(m.metadata["doc"], str):
                             m.metadata["doc"] = json.loads(m.metadata["doc"])
-                    
+
                     questions = self.get_followon_questions(answer, matches, max_sources)
 
                 try:
                     answer.follow_on_questions += questions
                 except (AttributeError, TypeError): 
                     answer.follow_on_questions = questions
-                    
+
             else:
                 if answer.faq_vectorstore_score >= 0.85:
                     for m_no, m in enumerate(matches_with_score):
@@ -1122,11 +1121,10 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                                 answer.follow_on_questions.insert(0 + m_no, matched_question + "/norewrite")
                             except (AttributeError, TypeError): 
                                 answer.follow_on_questions = [matched_question + "/norewrite"]
-                        
+
                     answer.is_suggestion = True
 
         return answer
-
 
     async def vectorstore_call(
         self,
@@ -1195,7 +1193,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return answer
 
-
     def remove_suffix(self, text, match):
         index = text.rfind(match)
         if index == -1:
@@ -1204,9 +1201,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             text_before_match = text[:index].strip()
             text_after_match = text[index + len(match):].strip()
             text = text_before_match + text_after_match
-        
-        return text
 
+        return text
 
     async def rewrite_query(
         self,
@@ -1232,30 +1228,29 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             """
             # Define a regex pattern to locate 'Followup questions:' followed by a JSON array
             pattern = r'(Follow[-\s]?up questions):\s*(\[[^\]]*\])'
-            
+
             # Search for the pattern using regex
             match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-            
+
             if not match:
                 # 'Followup questions:' section not found
                 return None
-            
+
             # Extract the JSON array string from the matched group
             followup_text = match.group(2)
-            
+
             try:
                 # Parse the extracted string to verify it's valid JSON
                 followup_questions = eval(followup_text)
-                
+
                 # Convert the Python object back to a formatted JSON string
-                #followup_json = json.dumps(followup_questions, indent=4)
-                
+                # followup_json = json.dumps(followup_questions, indent=4)
+
                 return followup_questions
             except json.JSONDecodeError as e:
                 # Handle JSON parsing errors
                 print("Error decoding JSON:", e)
                 return None
-
 
         def extract_rewritten_questions(derived_ctx):
             import re
@@ -1270,15 +1265,14 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 # rewrite formal failures: Use the original question. No rewrite
                 return None
 
-
         def add_followup_questions(answer, questions, skip1=False):
             for q in questions:
                 if skip1:
                     skip1 = False
                 elif q['similarity_score'] >= CONFIDENCE_THRESHOLD and \
                     answer.question != q['question']:
-                        answer.follow_on_questions.append(f"{q['question']}/norewrite")
-            
+                    answer.follow_on_questions.append(f"{q['question']}/norewrite")
+
         followup_questions = None
         answer = Answer(question=query.strip())
         answer.trace_id = trace_id
@@ -1291,11 +1285,11 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # Todo: Use LLM to just create topic & category
             answer.question = self.remove_suffix(answer.question, "/norewrite")
             return answer
-        
+
         if query.endswith(('/nocache', '/nocache ?', '/nocache?')):
             # Todo: Use LLM to just create topic & category
             query = self.remove_suffix(query, "/nocache")
-        
+
         lcase_question = (answer.question.split())[0].lower()
         if False and lcase_question.startswith(('how', 'what', 'will', 'can', 'why')):
             rewrite_prompt = self.prompts.rewrite[answer.state_category+"_raw"]
@@ -1341,7 +1335,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     answer.finline_response = True
                     answer.answer ="\nThe original question is ambiguous. "\
                                     "Please rephrase or escalate to supervisor. \n\n"
-                    
+
                 else:
                     find_match_prefix = (answer.question.split())[0].lower()
                     find_match = None
@@ -1353,7 +1347,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                             del derived[idx]
                             find_match = True
                             break
-   
+
                     if not find_match:
                         for idx, q in enumerate(derived):
                             if q['question'].lower().startswith(find_match_prefix):
@@ -1383,14 +1377,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                     add_followup_questions(answer, followup_questions)
 
                 return answer
-            
+
         except Exception as e:
             answer_text = str(e)
             logging.info(f"trace_id:{trace_id}, rewrite json failure: {answer_text}")
             answer.answer = "I can't answer this question. Please rephrase the question or escalate to supervisor."
 
         return answer
-
 
     async def aquery(
         self,
@@ -1412,7 +1405,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             )
             answer.context = pre + "\n\n" + answer.context
 
-
         bib = dict()
         bib_str = [] if stream_json else ""
         ref_dict = []
@@ -1422,7 +1414,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             citation = c.text.doc.citation
 
             # do check for whole key (so we don't catch Callahan2019a with Callahan2019)
-            #if name_in_text(name, answer_text):
+            # if name_in_text(name, answer_text):
             #   bib[name] = citationi
             SHARE_POINT_URL = "https://giprod.sharepoint.com/:b:/r/sites/TrainingTeam/Shared%20Documents/"
 
@@ -1453,7 +1445,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                         bib_str += f"\n {i+1}. {citation}"
                     ref_str += f"\n {i+1}. [{citation}]()"
                     ref_dict.append({"rank":i+1, "ref":f"{citation}", "doc_source": c.text.doc_source.lower()})
-        
+
         answer.ref_str = ref_str
         if securellm:
             tags = json.loads(self.llm.model_kwargs['headers']['x-sgpt-tags'])
@@ -1501,7 +1493,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             try:
                 # Comment the next line
-                #logging.trace(f"trace_id:{trace_id} context:{answer.context}")
+                # logging.trace(f"trace_id:{trace_id} context:{answer.context}")
                 answer_text = await qa_chain.arun(
                     context=answer.context,
                     answer_length=answer.answer_length,

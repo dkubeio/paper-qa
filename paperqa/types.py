@@ -27,12 +27,6 @@ CBManager = Union[AsyncCallbackManagerForChainRun, CallbackManagerForChainRun]
 CallbackFactory = Callable[[str], Union[None, List[BaseCallbackHandler]]]
 
 
-class Doc(BaseModel):
-    docname: str
-    citation: str
-    dockey: DocKey
-
-
 class WebScrapedMetaData(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now)
     scraped_date: datetime = Field(default_factory=datetime.now)
@@ -49,6 +43,10 @@ class SharepointPageMetaData(BaseModel):
     id: str
     url: str
 
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 class SharepointDocumentMetaData(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now)
@@ -59,6 +57,11 @@ class SharepointDocumentMetaData(BaseModel):
     url: str
     quickXorHash: str
 
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
 
 class Metadata(BaseModel):
     type : str
@@ -66,6 +69,12 @@ class Metadata(BaseModel):
 
     def to_json(self):
         return self.json()
+
+class Doc(BaseModel):
+    docname: str
+    citation: str
+    dockey: DocKey
+    metadata: Optional[Metadata] = None
 
 class Text(BaseModel):
     text: str
