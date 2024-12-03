@@ -928,9 +928,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             
             before_bm25 = []
             after_bm25 = []
-            # before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
-            # matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
-            # after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
+            before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
+            matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
+            after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
 
             rank = 1
             num_of_log_entries = 10
@@ -994,35 +994,35 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             #     scores_without_topic.append(scores[mno])
             #     bm25_scores_without_topic.append(bm25_scores[mno])
             
-            # derived_category = derived_category.lower() if derived_category else ''
-            # section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
-            # 
-            # if derived_category == section_category or derived_category in section_category:
-            #     matches_with_topic.append(m)
-            #     scores_with_topic.append(scores[mno])
-            #     bm25_scores_with_topic.append(bm25_scores[mno])
-            # else:
-            #     matches_without_topic.append(m)
-            #     scores_without_topic.append(scores[mno])
-            #     bm25_scores_without_topic.append(bm25_scores[mno])
-            
             derived_category = derived_category.lower() if derived_category else ''
             section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
             
             if derived_category == section_category or derived_category in section_category:
                 matches_with_topic.append(m)
                 scores_with_topic.append(scores[mno])
+                bm25_scores_with_topic.append(bm25_scores[mno])
             else:
                 matches_without_topic.append(m)
                 scores_without_topic.append(scores[mno])
+                bm25_scores_without_topic.append(bm25_scores[mno])
+            
+            # derived_category = derived_category.lower() if derived_category else ''
+            # section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
+            # 
+            # if derived_category == section_category or derived_category in section_category:
+            #     matches_with_topic.append(m)
+            #     scores_with_topic.append(scores[mno])
+            # else:
+            #     matches_without_topic.append(m)
+            #     scores_without_topic.append(scores[mno])
 
          # breakpoint()
         matches = matches_with_topic + matches_without_topic
         scores = scores_with_topic + scores_without_topic
-        # bm25_scores = bm25_scores_with_topic + bm25_scores_without_topic
+        bm25_scores = bm25_scores_with_topic + bm25_scores_without_topic
 
-        # after_cat_reranking = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
-        after_cat_reranking = [ (m.metadata['name'], scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
+        after_cat_reranking = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
+        # after_cat_reranking = [ (m.metadata['name'], scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
         # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
         # print(len(matches))
         # breakpoint()
