@@ -1042,31 +1042,43 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
         return dict_
 
-
-    async def faq_aget_evidence(self, answer, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
-        category_filter = self.category_filter_get(state_category, designation_category)
-        logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
-       
+    def get_faq_matches(self, query, k, category_filter):
         matches_with_score = []
         try:
             matches_with_score = self.cache_index.similarity_search_with_score(
-                answer.question, k=k, fetch_k=k,
+                query, k=k, fetch_k=k,
                 where_filter=category_filter
             )
         except Exception as e:
             print(f"ERROR: error in searching in cache, {e}")
-            answer.faq_vectorstore_score = 0.0
-            # return answer
+
+        return matches_with_score
+
+
+    async def faq_aget_evidence(self, answer, scenario_query, k, trace_id, state_category, designation_category, topic, follow_on_questions, max_sources, stream_json):
+        category_filter = self.category_filter_get(state_category, designation_category)
+        logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
+        matches_with_score = []
+        matches_with_score_rewritten_query = []
+        matches_with_score_query = self.get_faq_matches(answer.question, k, category_filter)
+        
+        if answer.question != scenario_query:
+            matches_with_score_rewritten_query = self.get_faq_matches(scenario_query, k, category_filter)
+     
+        matches_with_score = matches_with_score_query + matches_with_score_rewritten_query
+
         if not matches_with_score:
             answer.faq_vectorstore_score = 0.0
+        
+        matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
 
         if matches_with_score:
             answer.faq_feedback = matches_with_score[0][0].metadata['feedback']
             answer.faq_vectorstore_score = matches_with_score[0][1]
             answer.validated = matches_with_score[0][0].metadata['validated']
             answer.faq_match_question = matches_with_score[0][0].metadata['question']
-            
+           
             # if (answer.faq_feedback in ['positive', 'negative'] and answer.faq_vectorstore_score >= 0.90) or (answer.faq_vectorstore_score >= 0.98):
             if answer.faq_vectorstore_score >= 0.90:
                 if answer.faq_feedback == 'negative':
@@ -1128,6 +1140,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
     async def vectorstore_call(
         self,
         query: str,
+        scenario_query: str,
         k: Optional[int] = 10,
         max_sources: Optional[int] = 5,
         marginal_relevance: Optional[bool] = True,
@@ -1165,6 +1178,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             if enable_cache:
                 answer = await self.faq_aget_evidence(
                     answer,
+                    scenario_query,
                     k=k,
                     trace_id=trace_id,
                     state_category=state_category,
