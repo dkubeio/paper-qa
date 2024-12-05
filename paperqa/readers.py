@@ -13,7 +13,7 @@ from .types import Doc, Text
 from typing import BinaryIO, Dict, List, Set, Union, cast, Tuple, Any
 from numpy import ndarray
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from difflib import SequenceMatcher
 
 
 def parse_pdf_fitz(path: Path, doc: Doc, chunk_chars: int,
@@ -144,37 +144,18 @@ def parse_txt(
 
 
 def guess_the_page_no(
-    text: str, page_embeddings: Dict[int, np.ndarray], model: SentenceTransformer
+    text: str, page_texts: Dict[int, str]
 ) -> int:
-    text_embedding = model.encode(text)
+    max_similarity = 0
+    best_page = 0
 
-    page_similarity = []
-    for page_embedding in page_embeddings:
-        pg_embedding = page_embedding.get("embedding")
-        page_similarity.append(
-            np.dot(text_embedding, pg_embedding)
-            / (np.linalg.norm(text_embedding) * np.linalg.norm(pg_embedding))
-        )
+    for page_no, page_text in page_texts.items():
+        similarity = SequenceMatcher(None, text, page_text).ratio()
+        if similarity > max_similarity:
+            max_similarity = similarity
+            best_page = page_no
 
-    # return the page number of the page with the highest similarity
-    if page_similarity:
-        return page_similarity.index(max(page_similarity)) + 1
-
-    return 0
-
-
-def get_embeddings_for_pages(
-    pages: List[Dict[str, Union[str, int]]], model: SentenceTransformer
-) -> Dict[int, np.ndarray]:
-
-    page_embeddings = []
-    for page in pages:
-        page_text = page.get("page_text")
-        page_no = page.get("page_no")
-        page_embedding = model.encode(page_text)
-        page_embeddings.append({"page_no": page_no, "embedding": page_embedding})
-
-    return page_embeddings
+    return best_page
 
 
 def handle_pixtral_json_files(
@@ -194,18 +175,15 @@ def handle_pixtral_json_files(
         )
         return []
 
-    # load the embedding model
-    model = SentenceTransformer("BAAI/bge-m3")
-
     # get the text from the pixtral content
     doc_content = pixtral_content["data"]["document"]
     docname = Path(pixtral_content_file).parent.name
     split_texts = text_splitter.split_text(doc_content)
-    page_embeddings = get_embeddings_for_pages(pixtral_content["data"]["pages"], model)
+    pages = pixtral_content["data"]["pages"]
 
     texts = []
     for text in split_texts:
-        page_no = guess_the_page_no(text, page_embeddings, model)
+        page_no = guess_the_page_no(text, pages)
         texts.append(
             Text(
                 text=text,
