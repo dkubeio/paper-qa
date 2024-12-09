@@ -1060,13 +1060,13 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
        
         matches_with_score = []
-        matches_with_score_rewritten_query = []
+        matches_with_score_scenario_query = []
         matches_with_score_query = self.get_faq_matches(answer.question, k, category_filter)
         
         if answer.question != scenario_query:
-            matches_with_score_rewritten_query = self.get_faq_matches(scenario_query, k, category_filter)
+            matches_with_score_scenario_query = self.get_faq_matches(scenario_query, k, category_filter)
      
-        matches_with_score = matches_with_score_query + matches_with_score_rewritten_query
+        matches_with_score = matches_with_score_query + matches_with_score_scenario_query 
 
         if not matches_with_score:
             answer.faq_vectorstore_score = 0.0
