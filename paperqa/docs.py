@@ -46,6 +46,7 @@ from .utils import (
     md5sum,
 )
 
+from fuzzywuzzy import fuzz
 
 class NoMatchesFoundException(Exception):
     pass
@@ -754,7 +755,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         scores = sorted([m[1] for m in matches_with_score], reverse=True)
         matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
         matches = [match_with_score[0] for match_with_score in matches_with_score]
-        
+       
         new_matches = []
         new_scores = []
         unique_set = set()
@@ -910,7 +911,7 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             logging.info(f"trace_id:{trace_id} category_filter:{category_filter}")
                  
             matches_with_score = self.texts_index.similarity_search_with_score(
-                answer.question, k=_k, fetch_k=5 * _k,
+                answer.question, k=_k*5, fetch_k=5 * _k,
                 where_filter=category_filter
             )
             # print(len(matches_with_score))
@@ -926,20 +927,39 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
 
             matches, scores = self.filter_unique_matches(matches_with_score)
             
+            use_fuzzywuzzy = True
+            # bm25_search_before = True
+            bm25_search_before = False
+            
+            # bm25_search_after = True 
+            bm25_search_after = False 
+
             before_bm25 = []
             after_bm25 = []
-            before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
-            matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
-            after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
+            bm25_scores = []
+            
+            if bm25_search_before:
+                before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
+                matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
+                after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
 
             rank = 1
             num_of_log_entries = 10
+           
+            # print("***"*10)
+            
             for m, score in zip(matches[:num_of_log_entries], scores[:num_of_log_entries]):
                 vector_id = m.metadata["_additional"]["id"]
                 logging.info(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
                               f" doc:{json.loads(m.metadata['doc'])['docname']}"
                               f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
+        
+                # print(f"trace_id:{trace_id} rank:{rank} id:{vector_id}, score:{score:.2f}"
+                #               f" doc:{json.loads(m.metadata['doc'])['docname']}"
+                #               f" doc source: {m.metadata['doc_source']}-{m.metadata['state_category']}")
                 rank += 1
+             
+            # print("***"*10)
 
         for m in matches:
             if isinstance(m.metadata["doc"], str):
@@ -971,8 +991,8 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         matches = [m for m in matches if m.metadata["name"] not in cur_names]
       
         # breakpoint()
-        # print(len(matches))
-        # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
+        #print(len(matches))
+        #print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
         matches_with_topic = []
         matches_without_topic = []
         scores_with_topic = []
@@ -981,56 +1001,103 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         bm25_scores_without_topic = []
         after_cat_reranking = []
 
-        for mno, m in enumerate(matches):
-            # derived_topic = derived_topic.lower() if derived_topic else ''
-            # section_topic = m.metadata["section_topic"].lower() if m.metadata["section_topic"] else ''
+        derived_category = derived_category.lower() if derived_category else ''
+        matches_with_fuzzywuzzy_score = []
+        
+        derived_category = derived_category.lower() if derived_category else ''
 
-            # if derived_topic == section_topic or derived_topic in section_topic:
-            #     matches_with_topic.append(m)
-            #     scores_with_topic.append(scores[mno])
-            #     bm25_scores_with_topic.append(bm25_scores[mno])
-            # else:
-            #     matches_without_topic.append(m)
-            #     scores_without_topic.append(scores[mno])
-            #     bm25_scores_without_topic.append(bm25_scores[mno])
-            
-            derived_category = derived_category.lower() if derived_category else ''
+        for mno, m in enumerate(matches):
             section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
+            if use_fuzzywuzzy:
+                par_score = fuzz.partial_ratio(derived_category, section_category)
+                
+                if bm25_search_before:
+                    matches_with_fuzzywuzzy_score.append((m, scores[mno], par_score, bm25_scores[mno])) 
+                else:
+                    matches_with_fuzzywuzzy_score.append((m, scores[mno], par_score)) 
             
-            if derived_category == section_category or derived_category in section_category:
-                matches_with_topic.append(m)
-                scores_with_topic.append(scores[mno])
-                bm25_scores_with_topic.append(bm25_scores[mno])
             else:
-                matches_without_topic.append(m)
-                scores_without_topic.append(scores[mno])
-                bm25_scores_without_topic.append(bm25_scores[mno])
-            
-            # derived_category = derived_category.lower() if derived_category else ''
-            # section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
-            # 
-            # if derived_category == section_category or derived_category in section_category:
-            #     matches_with_topic.append(m)
-            #     scores_with_topic.append(scores[mno])
-            # else:
-            #     matches_without_topic.append(m)
-            #     scores_without_topic.append(scores[mno])
+                # derived_topic = derived_topic.lower() if derived_topic else ''
+                # section_topic = m.metadata["section_topic"].lower() if m.metadata["section_topic"] else ''
+
+                # if derived_topic == section_topic or derived_topic in section_topic:
+                #     matches_with_topic.append(m)
+                #     scores_with_topic.append(scores[mno])
+                #     bm25_scores_with_topic.append(bm25_scores[mno])
+                # else:
+                #     matches_without_topic.append(m)
+                #     scores_without_topic.append(scores[mno])
+                #     bm25_scores_without_topic.append(bm25_scores[mno])
+                
+                
+                par_score = fuzz.partial_ratio(derived_category, section_category)
+                sort_score = fuzz.token_sort_ratio(derived_category, section_category)
+                
+                # print("derived", derived_category)
+                # print("section", section_category) 
+                # print(par_score, sort_score)
+
+                if derived_category == section_category or derived_category in section_category:
+                    #import pdb; pdb.set_trace()
+                    matches_with_topic.append(m)
+                    scores_with_topic.append(scores[mno])
+                    if bm25_search_before:
+                        bm25_scores_with_topic.append(bm25_scores[mno])
+                else:
+                    matches_without_topic.append(m)
+                    scores_without_topic.append(scores[mno])
+                    if bm25_search_before:
+                        bm25_scores_without_topic.append(bm25_scores[mno])
+                
+                # derived_category = derived_category.lower() if derived_category else ''
+                # section_category = m.metadata["section_group"].lower() if m.metadata["section_group"] else ''
+                # 
+                # if derived_category == section_category or derived_category in section_category:
+                #     matches_with_topic.append(m)
+                #     scores_with_topic.append(scores[mno])
+                # else:
+                #     matches_without_topic.append(m)
+                #     scores_without_topic.append(scores[mno])
 
          # breakpoint()
-        matches = matches_with_topic + matches_without_topic
-        scores = scores_with_topic + scores_without_topic
-        bm25_scores = bm25_scores_with_topic + bm25_scores_without_topic
+        #import pdb; pdb.set_trace()
+        if use_fuzzywuzzy:
+            matches_with_score = sorted(matches_with_score, key=lambda tup: tup[1], reverse=True)
+            matches_with_fuzzywuzzy_score_sorted = sorted(matches_with_fuzzywuzzy_score, key=lambda tup: tup[2], reverse=True)
 
-        after_cat_reranking = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
-        # after_cat_reranking = [ (m.metadata['name'], scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
+            matches = [ m[0] for m in matches_with_fuzzywuzzy_score_sorted ]
+            scores = [ m[1] for m in matches_with_fuzzywuzzy_score_sorted ]
+            par_score_list =  [ m[2] for m in matches_with_fuzzywuzzy_score_sorted ]
+
+            # print("**"*10)
+            # for mno, m in enumerate(matches):
+            #     print(f"doc:{m.metadata['doc']['docname']},{m.metadata['section_topic'].lower()}, {par_score_list[mno]}")
+            # print("**"*10)
+
+            if bm25_search_before:
+                bm25_scores = [ m[3] for m in matches_with_fuzzywuzzy_score_sorted ]
+        else:
+            matches = matches_with_topic + matches_without_topic
+            scores = scores_with_topic + scores_without_topic
+            bm25_scores = bm25_scores_with_topic + bm25_scores_without_topic
+
+        matches = matches[:max_sources*2]
+
+        if bm25_search_before: 
+            after_cat_reranking = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
+        
+        if bm25_search_after: 
+            after_cat_reranking = [ (m.metadata['name'], scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ]
         # print([(m.metadata["name"], m.metadata['section_topic']) for m in matches ])
         # print(len(matches))
         # breakpoint()
         # now fnally cut down
         # print(f"len matches : {len(matches)}")
-        # before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ] 
-        # matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
-        # after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
+
+        if bm25_search_after:
+            before_bm25 = [ (m.metadata['name'],scores[mno], m.metadata['section_topic'], m.metadata['section_group'])  for mno, m in enumerate(matches) ]
+            matches, scores, bm25_scores = self.rerank_matches_using_bm25(answer, matches, scores)
+            after_bm25 = [ (m.metadata['name'], scores[mno], bm25_scores[mno], m.metadata['section_topic'], m.metadata['section_group']) for mno, m in enumerate(matches) ] 
 
         matches = matches[:max_sources]
         # print(f"len matches : {len(matches)}")
