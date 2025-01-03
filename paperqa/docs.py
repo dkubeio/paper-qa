@@ -1,20 +1,20 @@
 import asyncio
+import glob
 import json
 import logging
+from multiprocessing.connection import answer_challenge
 import os
 import re
 import sys
+import string
 import tempfile
+import traceback
 import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Set, Union, cast, Tuple, Any
-import glob
-import traceback
+from typing import Any, BinaryIO, Dict, List, Optional, Set, Tuple, Union, cast
 from urllib.parse import quote
-import json
-import re
 
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
@@ -26,13 +26,14 @@ from langchain.text_splitter import TextSplitter
 from langchain.vectorstores import FAISS
 from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, validator
+from regex import F
+from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
-from pathlib import Path
 
 from .chains import get_score, make_chain
 from .paths import PAPERQA_DIR
 from .readers import read_doc
-from .types import Answer, CallbackFactory, Context, Doc, DocKey, PromptCollection, Text, Faq_Text
+from .types import Answer, CallbackFactory, Context, Doc, DocKey, Faq_Text, PromptCollection, Text
 from .utils import (
     gather_with_concurrency,
     get_llm_name,
@@ -719,6 +720,85 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
         
         return questions
 
+    def list_word_strings(self, text, combination_length=1):
+        stop_words = [
+            "a", "about", "above", "after", "again", "against", "all", "am", "an",
+            "and", "any", "are", "aren't", "as", "at", "be", "because", "been", #another
+            "before", "being", "below", "between", "both", "but", "by", "can't",
+            "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
+            "doing", "don't", "down", "during", "each", "few", "for", "from",
+            "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having",
+            "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
+            "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
+            "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
+            "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor",
+            "not", "of", "off", "on", "once", "only", "or",  "ought", "our",  #"other"
+            "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
+            "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
+            "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
+            "then", "there", "there's", "these", "they", "they'd", "they'll",
+            "they're", "they've", "this", "those", "through", "to", "too", "under",
+            "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're",
+            "we've", "were", "weren't", "what", "what's", "when", "when's", "where",
+            "where's", "which", "while", "who", "who's", "whom", "why", "why's",
+            "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're",
+            "you've", "your", "yours", "yourself", "yourselves"
+        ]
+
+        # Split the text into words
+        words = text.split()
+        words = [word.strip(string.punctuation) for word in words if word not in stop_words]
+        words = [word.strip() for word in words if word != '']
+
+        #return words
+        word_combinations = []
+
+        # Generate word strings up to length specified by combination_length
+        for length in range(1, combination_length+1):  # lengths from 1 to N
+            for i in range(len(words) - length + 1):
+                word_combination = " ".join(words[i:i+length])
+                word_combinations.append(word_combination)
+
+        return word_combinations
+
+
+    def extend_query_with_necessary_tokens(self, question):
+        question_token_map = {
+            "aging off" : "aging off on a parents plan",
+            "back date" : "effective date change",
+            "move into state" : "resident in multiple states",
+            "out of state" : "resident in multiple states",
+            "1099 employee" : "independent contractor",
+        }
+
+        for k,v in question_token_map.items():
+            if k in question:
+                question = question + " " + v
+                break
+
+        return question
+
+
+    def rerank_matches_using_bm25(self, answer, matches):
+        tokenized_corpus = []
+        for match in matches:
+            tokenized_corpus.append(self.list_word_strings(match.page_content))
+
+        bm25 = BM25Okapi(tokenized_corpus)
+        question = self.extend_query_with_necessary_tokens(answer.question)
+        query_words = self.list_word_strings(question, 2)
+
+        bm25_scores = bm25.get_scores(query_words)
+        scores_with_indices = []
+        for i in range(len(bm25_scores)):
+            scores_with_indices.append([bm25_scores[i], i])
+
+        # sort the score descending
+        scores_with_indices = sorted(scores_with_indices, key=lambda x: x[0], reverse=True)
+
+        # sort matches with indices in scores_with_indices
+        return [matches[i] for _, i in scores_with_indices]
+
 
     async def aget_evidence(
         self,
@@ -775,6 +855,9 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
             # fetch all the scores in a list, sort them in descending order
 
             matches, scores = self.filter_unique_matches(matches_with_score)
+
+            # rerank the matches used on BM25.
+            matches = self.rerank_matches_using_bm25(answer, matches)
 
             rank = 1
             num_of_log_entries = 10
@@ -922,7 +1005,6 @@ class Docs(BaseModel, arbitrary_types_allowed=True, smart_union=True):
                 start_time = datetime.now()
                 query_and_matches = [[answer.question, m.page_content] for m in matches]
                 model = CrossEncoder(
-                    # model_name="BAAI/bge-reranker-large", max_length=512
                     model_name="BAAI/bge-reranker-v2-m3", max_length=1024
                 )
                 scores = model.predict(query_and_matches)
